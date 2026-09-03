@@ -6,6 +6,7 @@ const authRoutes = require('./authRoutes');
 const catalogoRoutes = require('./catalogoRoutes');
 const retiroRoutes = require('./retiroRoutes');
 const prestamoRoutes = require('./prestamoRoutes');
+const incidenciaRoutes = require('./incidenciaRoutes');
 
 /** Monta todas las rutas de la API. Se cuelga de `/api` en app.js. */
 const router = express.Router();
@@ -16,10 +17,10 @@ router.use('/auth', authRoutes);
 router.use('/catalogo', catalogoRoutes);
 router.use('/retiros', retiroRoutes);
 router.use('/prestamos', prestamoRoutes);
+router.use('/incidencias', incidenciaRoutes);
 
 // Rutas pendientes (se agregan al avanzar con las HU):
 //   /equipos/:id/componentes  -> edicion directa del estado fisico por TIC
-//   /incidencias              -> HU03
 //   /logs                     -> HU06
 //   /dashboard                -> HU05
 

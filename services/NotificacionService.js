@@ -28,4 +28,11 @@ function equipoEnReparacion(equipo, motivo) {
   });
 }
 
-module.exports = { notificar, prestamoFormalizado, equipoEnReparacion };
+function incidenciaReportada(equipo, incidencia) {
+  return notificar('INCIDENCIA_REPORTADA', 'soporte-tic', {
+    incidenciaId: incidencia.id,
+    equipo: equipo.codigo_interno,
+  });
+}
+
+module.exports = { notificar, prestamoFormalizado, equipoEnReparacion, incidenciaReportada };

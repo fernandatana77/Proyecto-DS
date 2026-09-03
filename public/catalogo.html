@@ -46,6 +46,36 @@
     </div>
   </div>
 
+  <!-- Modal: reportar incidencia (HU03) - el empleado solo describe en texto libre -->
+  <div id="modal-incidencia" class="modal-fondo" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="inc-titulo">
+      <section id="inc-paso-form">
+        <h2 id="inc-titulo">Reportar incidencia</h2>
+        <p class="subtitulo" id="inc-subtitulo"></p>
+        <div id="inc-aviso" class="aviso error" hidden></div>
+
+        <label for="inc-descripcion">Describe el problema</label>
+        <textarea id="inc-descripcion" rows="4" placeholder="Cuenta qué está fallando, cuándo empezó, qué estabas haciendo..."></textarea>
+
+        <p class="nota-info">El área de TIC revisará y clasificará la incidencia. El equipo
+        sigue asignado a ti hasta que lo devuelvas.</p>
+
+        <div class="acciones-modal">
+          <button class="btn btn-secundario" id="btn-cancelar-inc">Cancelar</button>
+          <button class="btn btn-primario" id="btn-enviar-inc">Enviar reporte</button>
+        </div>
+      </section>
+
+      <section id="inc-paso-ok" hidden>
+        <h2>Incidencia reportada</h2>
+        <div class="aviso ok" id="inc-texto-ok"></div>
+        <div class="acciones-modal">
+          <button class="btn btn-primario" id="btn-cerrar-inc-ok">Entendido</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
   <!-- Modal: detalle de estado de UN equipo (solo lectura) -->
   <div id="modal-estado" class="modal-fondo" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="estado-titulo">

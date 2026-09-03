@@ -37,7 +37,7 @@ lectura** (verde = bueno, amarillo = regular, rojo = malo) y lo acepta con su PI
 Los componentes validos dependen de la categoria del equipo
 (`COMPONENTES_POR_CATEGORIA` en `config/constantes.js`).
 
-## Flujo implementado (HU01 + HU02)
+## Flujo de préstamo (HU01 + HU02)
 
 1. El empleado abre la PWA e ingresa su **PIN de 6 digitos** (`POST /api/auth/pin`).
    Tras 3 PIN incorrectos la IP queda bloqueada 15 minutos (RNF05).
@@ -50,6 +50,18 @@ Los componentes validos dependen de la categoria del equipo
 4. Se crea un `retiro` con N `prestamo` (`POST /api/retiros`), cada equipo pasa a
    `Prestado` (RN01) y queda constancia en la bitacora inmutable (RF07). Si algun
    equipo del carrito no esta disponible, se rechaza **todo** el retiro.
+
+## Incidencias (HU03) — el empleado solo describe, TIC clasifica
+
+1. **El empleado reporta.** En el banner de `catalogo.html`, botón **"Reportar
+   incidencia"** por equipo: un solo campo de **texto libre**. No elige severidad
+   ni toca el estado del equipo. La incidencia nace `sin clasificar` / `Abierta`.
+2. **TIC la tría.** En `panel.html`, pestaña **"Incidencias"** (las `sin
+   clasificar` primero): "Atender" asigna severidad (baja/media/alta), mueve el
+   estado (Abierta → En proceso → Cerrada) y guarda notas.
+3. El equipo sigue asignado al empleado. Si al devolverlo queda alguna incidencia
+   **abierta**, la certificación de recepción manda el equipo a `En Reparación`
+   (RN04) aunque el checklist esté limpio.
 
 ## Devolución (HU04) — dos pasos, dos pantallas
 
@@ -70,8 +82,10 @@ Los componentes validos dependen de la categoria del equipo
 | Quiero... | Toco... |
 |-----------|---------|
 | Retirar equipos | `/` → PIN → tarjetas del catálogo → "Revisar retiro" → PIN |
+| Reportar una incidencia (empleado) | `/` → PIN → banner → "Reportar incidencia" → texto libre |
 | Devolver un equipo (empleado) | `/` → PIN → banner "Tienes N equipos prestados" → "Solicitar devolución" |
-| Certificar una devolución (TIC) | `/` → "¿Eres del área de TIC? Inicia sesión aquí" → `staff.html` → `panel.html` → "Certificar recepción" |
+| Atender incidencias (TIC) | `/` → "¿Eres del área de TIC?..." → `staff.html` → `panel.html` → pestaña "Incidencias" → "Atender" |
+| Certificar una devolución (TIC) | ídem → pestaña "Devoluciones pendientes" → "Certificar recepción" |
 
 ## Endpoints
 
@@ -87,19 +101,26 @@ Los componentes validos dependen de la categoria del equipo
 | POST | `/api/prestamos/:id/solicitar-devolucion` | PIN | HU04 |
 | GET  | `/api/prestamos/pendientes` | staff | HU04 |
 | POST | `/api/prestamos/:id/devolucion` | staff | HU04 |
+| POST | `/api/incidencias` · GET `/api/incidencias/mias` | PIN | HU03 |
+| GET  | `/api/incidencias` · PATCH `/api/incidencias/:id` | staff | HU03 |
 
 ## Tests
 
 ```bash
-npm test
+npm test        # 22/22
 ```
 
-`tests/flujoRetiro.test.js` (13 casos): HU01 multi-equipo, RN01 (rechazo total),
-RN02, "el empleado no fija el estado", RN04 con y sin daño, retiro parcial,
-HU04 (solicitud del empleado, préstamo ajeno, orden de la cola de TIC),
-RF07 (bitacora inmutable a nivel de BD), RNF05, validaciones de entrada.
+- `tests/flujoRetiro.test.js` (13): HU01 multi-equipo, RN01 (rechazo total), RN02,
+  "el empleado no fija el estado", RN04 con y sin daño, retiro parcial, HU04
+  (solicitud, préstamo ajeno, orden de la cola), RF07 (bitácora inmutable en BD),
+  RNF05, validaciones.
+- `tests/flujoIncidencia.test.js` (9): reporte nace `sin clasificar`/`Abierta` y no
+  cambia el equipo; descripción corta / préstamo ajeno / préstamo devuelto
+  rechazados; **RN04 con incidencia abierta** → `En Reparación`; triage de TIC y
+  cierre; TIC no puede poner `sin clasificar`; la cola prioriza `sin clasificar`;
+  el empleado solo ve sus propias incidencias.
 
 ## Pendiente
 
+- HU06 `/api/logs` (bitácora, solo lectura), HU05 `/api/dashboard`
 - `/api/equipos/:id/componentes` — edición directa del estado físico por TIC
-- HU03 `/api/incidencias`, HU06 `/api/logs`, HU05 `/api/dashboard`

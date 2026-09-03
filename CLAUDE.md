@@ -75,7 +75,7 @@ public/       PWA. Páginas: index.html (login PIN empleado, oscuro), staff.html
               (login usuario/contraseña TIC, oscuro), catalogo.html (empleado,
               claro), panel.html (TIC: cola de devoluciones, claro). iconos.js = SVG por categoría
 scripts/      seed.js (DROP + CREATE + datos demo)
-tests/        node:test (tests/flujoRetiro.test.js)
+tests/        node:test — flujoRetiro.test.js (HU01/02/04), flujoIncidencia.test.js (HU03)
 app.js        arma el Express app (parsers, /api, estáticos, 404, errorHandler)
 servidor.js   inicializa la BD y hace listen()
 ```
@@ -99,6 +99,7 @@ los 5xx se registran solo en el servidor.
 | Service | Responsabilidad |
 |---------|-----------------|
 | `PrestamoService` | `registrarRetiroConPin` (HU01) y `registrarDevolucion` (HU04). Dueño de RN01, RN02, RN04. Transacción: `retiro` + N × (checklist salida + `prestamo` + estado del equipo + log). |
+| `IncidenciaService` | `reportarIncidencia` (empleado, HU03) y `triarIncidencia` (staff: severidad + estado + notas). Reportar NO cambia `equipo.estado`. |
 | `AuditoriaService` | **Solo** `registrar()` y `consultar()`. Nunca update/delete. Es la única vía para escribir en `log_auditoria`. |
 | `DepreciacionService` | Vida útil / valor residual del equipo (línea recta sobre `vida_util_meses`). Alimenta HU05. |
 | `NotificacionService` | Punto único de notificaciones (préstamo vencido, incidencia, etc.). En v1 registra en consola/log. |
@@ -147,6 +148,11 @@ Todas las CREATE TABLE y los triggers viven en `models/esquema.js`
 - **`prestamo`** también lleva `devolucion_solicitada` / `fecha_solicitud_devolucion`:
   el empleado marca que va a devolver (HU04 paso 1); TIC lo cierra al certificar
   la recepción (paso 2).
+- **`incidencia`** (HU03): el empleado solo escribe `descripcion` (texto libre).
+  Nace `severidad = 'sin clasificar'`, `estado = 'Abierta'`. TIC la tría:
+  `severidad` ∈ {baja, media, alta}, `estado` ∈ {Abierta, En proceso, Cerrada},
+  `notas_tic`, `atendida_por_id`, `fecha_cierre`. Reportarla **no** toca
+  `equipo.estado`; RN04 la considera al devolver (`estado != 'Cerrada'` = abierta).
 - **`log_auditoria`**: append-only. Triggers `BEFORE UPDATE` / `BEFORE DELETE`
   hacen `RAISE(ABORT, ...)`. No tiene columnas de edición ni borrado.
 
@@ -157,8 +163,9 @@ Todas las CREATE TABLE y los triggers viven en `models/esquema.js`
 | **RF01 / RNF05** | `authController`, `authJWT`, `authPIN`, `rateLimitPIN` | Staff = usuario+contraseña (JWT). Empleado = solo PIN de 6 dígitos (hash). 3 PIN fallidos → bloqueo 15 min. |
 | **RF02 / RN02** | `PrestamoService.registrarRetiroConPin` | Un retiro no es válido sin checklist de **salida** (foto del estado) Y reenvío del PIN del empleado. El empleado solo acepta un checklist de **solo lectura**. |
 | **RN01** | `PrestamoService.asegurarEquipoPrestable` | Un equipo en `Prestado`, `En Reparación`, `En Instalación` o `De Baja` **no** puede prestarse. Solo `Disponible`. Si un equipo del carrito falla, se rechaza **todo** el retiro. → 409. |
-| **RN04** | `PrestamoService.registrarDevolucion` | La devolución tiene 2 pasos: (1) el empleado la **solicita** (`solicitarDevolucion`, marca `devolucion_solicitada`, no cierra nada); (2) TIC **certifica la recepción** con checklist editable. Si ese checklist marca `malo` o hay incidencia abierta → el equipo pasa **automáticamente** a `En Reparación`. |
+| **RN04** | `PrestamoService.registrarDevolucion` | La devolución tiene 2 pasos: (1) el empleado la **solicita** (`solicitarDevolucion`, marca `devolucion_solicitada`, no cierra nada); (2) TIC **certifica la recepción** con checklist editable. Si ese checklist marca `malo` **o** hay una incidencia abierta (HU03) → el equipo pasa **automáticamente** a `En Reparación`. |
 | **RF07 / RN03** | `AuditoriaService` + triggers de BD | Los logs de auditoría son solo lectura: ni editables ni borrables (garantizado en código y en la BD). |
+| **HU03 (principio)** | `IncidenciaService` | El empleado **solo describe** el problema en texto libre. No clasifica ni cambia el estado del equipo — eso lo decide TIC al triar (mismo principio que el checklist de préstamo/devolución). |
 
 ## Historias de usuario (alcance v1)
 
@@ -169,7 +176,7 @@ vuelven casos de prueba funcionales.
 |----|--------|--------------------------------|
 | **HU01** | Registro y formalización de préstamo con PIN | `POST /api/auth/pin`, `POST /api/retiros`; `index.html` (login PIN) → `catalogo.html` (carrito + PIN) |
 | **HU02** | Consulta de catálogo y estado de asignación actual | `GET /api/catalogo`, `GET /api/catalogo/:id`, `GET /api/retiros/mios`; `catalogo.html` en tarjetas por categoría |
-| **HU03** | Reporte de incidencias durante el préstamo | `POST /api/incidencias` |
+| **HU03** | Reporte de incidencias durante el préstamo | Empleado: `POST /api/incidencias` + `GET /api/incidencias/mias` (botón "Reportar incidencia" en el banner de `catalogo.html`). TIC: `GET /api/incidencias` + `PATCH /api/incidencias/:id` (pestaña "Incidencias" de `panel.html`) |
 | **HU04** | Devolución de equipo y checklist de recepción | Empleado: `GET /api/prestamos/mios-activos` + `POST /api/prestamos/:id/solicitar-devolucion` (banner en `catalogo.html`). TIC: `staff.html` (login) → `panel.html` → `GET /api/prestamos/pendientes` + `POST /api/prestamos/:id/devolucion` |
 | **HU05** | Dashboard interactivo y vida útil | `GET /api/dashboard`, `DepreciacionService` |
 | **HU06** | Consulta y auditoría de bitácora de logs | `GET /api/logs` (solo staff, solo lectura) |
@@ -180,71 +187,75 @@ vuelven casos de prueba funcionales.
 |-------|-----------------|
 | Empleado retira equipos | `/` → PIN → `catalogo.html` → seleccionar tarjetas → "Revisar retiro" → PIN |
 | Empleado **solicita** devolución | `/` → PIN → `catalogo.html` → banner **"Tienes N equipos prestados"** (arriba de todo) → "Solicitar devolución" |
-| TIC certifica la recepción | `/` → enlace **"¿Eres del área de TIC? Inicia sesión aquí"** → `staff.html` → usuario/contraseña → `panel.html` → "Certificar recepción" |
+| Empleado **reporta incidencia** | `/` → PIN → `catalogo.html` → banner → "Reportar incidencia" → describe en texto libre |
+| TIC certifica la recepción | `/` → enlace **"¿Eres del área de TIC? Inicia sesión aquí"** → `staff.html` → usuario/contraseña → `panel.html` → pestaña "Devoluciones pendientes" → "Certificar recepción" |
+| TIC tría incidencias | `staff.html` → `panel.html` → pestaña **"Incidencias"** → "Atender" (severidad + estado + notas) |
 
 ### Estado: qué está completo y verificado
-
-Al cierre de la sesión del **2026-09-02** (commit inicial `f6ab15c`):
 
 | HU | Estado | Verificación |
 |----|--------|--------------|
 | **HU01** Retiro con PIN | ✅ backend + PWA | tests + navegador |
 | **HU02** Catálogo y estado de asignación | ✅ backend + PWA | tests + navegador |
+| **HU03** Reporte de incidencias + triage TIC | ✅ backend + PWA | tests + navegador |
 | **HU04** Devolución + checklist de recepción | ✅ backend + PWA | tests + navegador |
-| HU03 Incidencias | ⛔ no empezada | — |
 | HU05 Dashboard / vida útil | ⛔ no empezada (`DepreciacionService` ya existe) | — |
 | HU06 Bitácora de logs | ⛔ no empezada (`AuditoriaService.consultar` ya existe) | — |
 
-**Pruebas automáticas** — `npm test` → `tests/flujoRetiro.test.js`, **13/13**:
+**Pruebas automáticas** — `npm test`, **22/22**:
 
-1. HU01: retiro multi-equipo → préstamos formalizados y equipos `Prestado`.
-2. RN02: PIN de aceptación incorrecto → no se formaliza nada del retiro.
-3. RN01: si un equipo del carrito no está `Disponible` se rechaza **todo** el retiro.
-4. El checklist de salida es la foto de `componente_equipo` (el empleado no lo fija).
-5. RN04: devolución con daño en recepción → equipo `En Reparación`, retiro `Devuelto`.
-6. RN04: devolución sin daño → equipo vuelve a `Disponible`.
-7. Retiro parcial: al devolver 1 de 2 equipos, el retiro queda `Parcial`.
-8. HU04 paso 1: el empleado solicita la devolución (marca el préstamo, no lo cierra; idempotente).
-9. HU04 paso 1: un empleado no puede solicitar la devolución de un préstamo ajeno.
-10. HU04: la cola de pendientes de TIC pone las devoluciones solicitadas primero.
-11. RF07 / RN03: `log_auditoria` no se puede `UPDATE` ni `DELETE` (triggers de BD).
-12. RNF05: 3 intentos de PIN fallidos activan el bloqueo.
-13. Validación: retiro sin equipos / con ids duplicados.
+- `tests/flujoRetiro.test.js` (13): HU01 multi-equipo; RN02; RN01 (rechazo total);
+  "el empleado no fija el estado"; RN04 con/sin daño; retiro parcial; HU04
+  (solicitud, préstamo ajeno, orden de la cola); RF07/RN03 (bitácora inmutable en BD);
+  RNF05; validaciones.
+- `tests/flujoIncidencia.test.js` (9): el reporte nace `sin clasificar`/`Abierta`
+  y **no** cambia el estado del equipo; descripción muy corta rechazada; no se puede
+  reportar sobre préstamo ajeno ni devuelto; **RN04 con incidencia abierta** →
+  `En Reparación` aunque el checklist esté limpio; triage de TIC (severidad +
+  cierre); TIC no puede asignar `sin clasificar`; la cola pone `sin clasificar`
+  primero; el empleado solo ve sus propias incidencias.
 
-**Prueba manual en navegador** (Chrome, Node 22, `npm run seed`): los tres flujos
-de punta a punta — empleado retira 2 equipos, empleado pulsa "Solicitar
-devolución" (banner), staff entra por `staff.html` y certifica en `panel.html`
-marcando un componente `Malo` → el equipo pasa a `En Reparación` (RN04).
+**Prueba manual en navegador** (Chrome, Node 22, `npm run seed`): los cuatro
+flujos de punta a punta — empleado retira equipos; empleado reporta incidencia
+(texto libre) y ve el badge "1 incidencia en revisión"; empleado solicita
+devolución; TIC entra por `staff.html`, tría la incidencia (Media / En proceso)
+y certifica la recepción en `panel.html`.
 
 ### Qué falta, en orden
 
-1. **HU04 — pulido opcional**: hoy el préstamo se puede certificar aunque el
-   empleado no lo haya "solicitado" (la solicitud solo reordena la cola). Si el
-   enunciado exige que la solicitud sea obligatoria, añadir esa validación.
-2. **HU03 — Incidencias** (`incidencia` ya existe en el esquema):
-   `POST /api/incidencias` (empleado, authPIN, sobre un préstamo activo suyo) +
-   `IncidenciaService`. Al reportarse, `RN04` ya considera "incidencia abierta"
-   en la devolución — verificar ese enganche. Pantalla en `catalogo.html`
-   (acción por equipo del banner de "mis equipos prestados").
-3. **HU06 — Bitácora** (`AuditoriaService.consultar` ya está):
+1. **HU06 — Bitácora** (`AuditoriaService.consultar` ya está):
    `GET /api/logs` con filtros (acción, entidad, rango de fechas, paginación),
    `authJWT` solo staff. Pantalla nueva o pestaña en `panel.html`. **Solo lectura.**
-4. **HU05 — Dashboard** (`DepreciacionService.calcularVidaUtil` ya está):
+2. **HU05 — Dashboard** (`DepreciacionService.calcularVidaUtil` ya está):
    `GET /api/dashboard` (equipos por estado, préstamos activos, top vida útil
    consumida, alertas de reparación). Pantalla con gráficos simples.
-5. **Edición del estado físico por TIC**: `PATCH /api/equipos/:id/componentes`
+3. **Edición del estado físico por TIC**: `PATCH /api/equipos/:id/componentes`
    (`authJWT` staff) para que Admin/Técnico ajusten `componente_equipo` fuera de
    una devolución (alta de equipo, mantenimiento). Hoy solo se actualiza al
    certificar una recepción.
-6. **Migraciones**: si el proyecto va más allá de la demo, reemplazar el
+4. **Migraciones**: si el proyecto va más allá de la demo, reemplazar el
    `DROP + CREATE` del seed por migraciones incrementales.
 
-### Decisiones de diseño de esta sesión (no evidentes solo en el código)
+Pulidos opcionales (según lo que pida el enunciado): la devolución se puede
+certificar aunque el empleado no la haya "solicitado" (la solicitud solo
+reordena la cola); no hay endpoint de "cerrar/resolver" incidencia separado del
+triage genérico.
+
+### Decisiones de diseño (no evidentes solo en el código)
 
 - **El estado físico lo mantiene TIC, no el empleado.** Corrección de un diseño
   inicial que dejaba al empleado marcar bueno/regular/malo en el préstamo. Ahora
   vive en `componente_equipo` (editable solo por Admin/Técnico) y el empleado lo
   ve en **solo lectura**. El checklist de salida es una *foto* de ese estado.
+- **Incidencias (HU03): mismo principio.** El empleado solo escribe texto libre;
+  la incidencia nace `severidad = 'sin clasificar'` (valor añadido al CHECK del
+  DER a propósito) / `estado = 'Abierta'`. TIC clasifica y mueve el estado en la
+  pestaña "Incidencias" de `panel.html`. Reportar **no** cambia el estado del
+  equipo: el enganche a `En Reparación` ocurre solo en la devolución (RN04).
+- **Triage genérico, no acciones separadas.** `PATCH /api/incidencias/:id` con
+  `{severidad?, estado?, notasTic?}` cubre clasificar, avanzar y cerrar. TIC no
+  puede volver a `sin clasificar` (`SEVERIDADES_TRIAGE`). Al pasar a `Cerrada`
+  se fija `fecha_cierre`; al reabrir se limpia.
 - **Componentes por categoría, no una lista global.** Un mouse no tiene
   "pantalla". `COMPONENTES_POR_CATEGORIA` define el set por categoría de equipo;
   se instancian en `componente_equipo` al crear el equipo (hoy solo el seed).

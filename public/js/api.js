@@ -104,6 +104,9 @@ const API = (() => {
     misPrestamosActivos: () => pedir('/prestamos/mios-activos'),
     solicitarDevolucion: (prestamoId) =>
       pedir(`/prestamos/${prestamoId}/solicitar-devolucion`, { metodo: 'POST' }),
+    reportarIncidencia: (prestamoId, descripcion) =>
+      pedir('/incidencias', { metodo: 'POST', cuerpo: { prestamoId, descripcion } }),
+    misIncidencias: () => pedir('/incidencias/mias'),
 
     // --- Staff Admin / Tecnico (usuario + contrasena) ---
     loginStaff: (usuario, password) =>
@@ -111,5 +114,8 @@ const API = (() => {
     devolucionesPendientes: () => pedir('/prestamos/pendientes'),
     certificarDevolucion: (prestamoId, checklist) =>
       pedir(`/prestamos/${prestamoId}/devolucion`, { metodo: 'POST', cuerpo: { checklist } }),
+    incidencias: (params = '') => pedir(`/incidencias${params}`),
+    triarIncidencia: (id, cambios) =>
+      pedir(`/incidencias/${id}`, { metodo: 'PATCH', cuerpo: cambios }),
   };
 })();

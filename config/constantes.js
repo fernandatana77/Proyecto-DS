@@ -65,6 +65,27 @@ const ESTADOS_COMPONENTE = Object.freeze(['bueno', 'regular', 'malo']);
 /** Un componente en 'malo' cuenta como dano (RN04). */
 const ESTADO_COMPONENTE_CON_DANO = 'malo';
 
+/**
+ * Incidencias (HU03). El Empleado SOLO describe el problema en texto libre:
+ * la incidencia nace 'sin clasificar' / 'Abierta'. TIC clasifica la severidad
+ * y mueve el estado despues de revisarla (triage).
+ */
+const SEVERIDAD_SIN_CLASIFICAR = 'sin clasificar';
+const SEVERIDADES_INCIDENCIA = Object.freeze([SEVERIDAD_SIN_CLASIFICAR, 'baja', 'media', 'alta']);
+/** Lo que TIC puede asignar al triar (no puede volver a 'sin clasificar'). */
+const SEVERIDADES_TRIAGE = Object.freeze(['baja', 'media', 'alta']);
+
+const ESTADOS_INCIDENCIA = Object.freeze({
+  ABIERTA: 'Abierta',
+  EN_PROCESO: 'En proceso',
+  CERRADA: 'Cerrada',
+});
+/** Una incidencia distinta de 'Cerrada' cuenta como abierta (RN04). */
+const ESTADOS_INCIDENCIA_ABIERTA = Object.freeze([
+  ESTADOS_INCIDENCIA.ABIERTA,
+  ESTADOS_INCIDENCIA.EN_PROCESO,
+]);
+
 const AUTENTICACION = Object.freeze({
   LONGITUD_PIN: 6,
   MAX_INTENTOS_PIN: 3,
@@ -84,6 +105,8 @@ const ACCIONES_AUDITORIA = Object.freeze({
   EQUIPO_A_REPARACION: 'EQUIPO_A_REPARACION',
   ESTADO_COMPONENTE_ACTUALIZADO: 'ESTADO_COMPONENTE_ACTUALIZADO',
   INCIDENCIA_REPORTADA: 'INCIDENCIA_REPORTADA',
+  INCIDENCIA_ACTUALIZADA: 'INCIDENCIA_ACTUALIZADA',
+  INCIDENCIA_CERRADA: 'INCIDENCIA_CERRADA',
 });
 
 module.exports = {
@@ -98,6 +121,11 @@ module.exports = {
   CATEGORIAS_EQUIPO,
   ESTADOS_COMPONENTE,
   ESTADO_COMPONENTE_CON_DANO,
+  SEVERIDAD_SIN_CLASIFICAR,
+  SEVERIDADES_INCIDENCIA,
+  SEVERIDADES_TRIAGE,
+  ESTADOS_INCIDENCIA,
+  ESTADOS_INCIDENCIA_ABIERTA,
   AUTENTICACION,
   ACCIONES_AUDITORIA,
 };

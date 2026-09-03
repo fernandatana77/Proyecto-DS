@@ -16,6 +16,7 @@ function presentarPrestamoActivo(fila) {
     fechaPrestamo: fila.fecha_prestamo,
     devolucionSolicitada: Boolean(fila.devolucion_solicitada),
     fechaSolicitud: fila.fecha_solicitud_devolucion,
+    incidenciasAbiertas: fila.incidencias_abiertas ?? 0,
   };
 }
 

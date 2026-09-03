@@ -77,13 +77,17 @@ function marcarDevolucionSolicitada(id) {
   return buscarPorId(id);
 }
 
+const SUBQUERY_INCIDENCIAS_ABIERTAS =
+  "(SELECT COUNT(*) FROM incidencia i WHERE i.prestamo_id = p.id AND i.estado != 'Cerrada') AS incidencias_abiertas";
+
 /** Prestamos activos de un empleado con datos del equipo y del retiro. */
 function listarActivosPorEmpleado(empleadoId) {
   return obtenerConexion()
     .prepare(
       `SELECT p.id, p.retiro_id, p.fecha_prestamo, p.devolucion_solicitada, p.fecha_solicitud_devolucion,
               e.id AS equipo_id, e.codigo_interno AS equipo_codigo, e.nombre AS equipo_nombre,
-              e.categoria AS equipo_categoria
+              e.categoria AS equipo_categoria,
+              ${SUBQUERY_INCIDENCIAS_ABIERTAS}
        FROM prestamo p JOIN equipo e ON e.id = p.equipo_id
        WHERE p.empleado_id = ? AND p.estado = 'Activo'
        ORDER BY p.devolucion_solicitada DESC, p.fecha_prestamo`
@@ -98,7 +102,8 @@ function listarPendientesDevolucion() {
       `SELECT p.id, p.retiro_id, p.fecha_prestamo, p.devolucion_solicitada, p.fecha_solicitud_devolucion,
               e.id AS equipo_id, e.codigo_interno AS equipo_codigo, e.nombre AS equipo_nombre,
               e.categoria AS equipo_categoria,
-              (emp.nombres || ' ' || emp.apellidos) AS empleado_nombre, emp.sede AS empleado_sede
+              (emp.nombres || ' ' || emp.apellidos) AS empleado_nombre, emp.sede AS empleado_sede,
+              ${SUBQUERY_INCIDENCIAS_ABIERTAS}
        FROM prestamo p
        JOIN equipo e    ON e.id = p.equipo_id
        JOIN empleado emp ON emp.id = p.empleado_id

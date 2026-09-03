@@ -108,17 +108,25 @@ CREATE TABLE IF NOT EXISTS checklist_estado (
   creado_en          TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
+-- HU03. El Empleado solo escribe descripcion (texto libre). La incidencia nace
+-- 'sin clasificar' / 'Abierta'; TIC asigna severidad, mueve el estado y agrega
+-- notas_tic al triarla. Reportar una incidencia NO cambia el estado del equipo.
 CREATE TABLE IF NOT EXISTS incidencia (
-  id                INTEGER PRIMARY KEY AUTOINCREMENT,
-  prestamo_id       INTEGER REFERENCES prestamo(id),
-  equipo_id         INTEGER NOT NULL REFERENCES equipo(id),
-  reportado_por_tipo TEXT   NOT NULL,
-  reportado_por_id  INTEGER,
-  descripcion       TEXT    NOT NULL,
-  severidad         TEXT    NOT NULL DEFAULT 'media' CHECK (severidad IN ('baja','media','alta')),
-  estado            TEXT    NOT NULL DEFAULT 'Abierta' CHECK (estado IN ('Abierta','En proceso','Cerrada')),
-  fecha_reporte     TEXT    NOT NULL DEFAULT (datetime('now')),
-  fecha_cierre      TEXT
+  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+  prestamo_id        INTEGER REFERENCES prestamo(id),
+  equipo_id          INTEGER NOT NULL REFERENCES equipo(id),
+  reportado_por_tipo TEXT    NOT NULL,
+  reportado_por_id   INTEGER,
+  descripcion        TEXT    NOT NULL,
+  severidad          TEXT    NOT NULL DEFAULT 'sin clasificar'
+                     CHECK (severidad IN ('sin clasificar','baja','media','alta')),
+  estado             TEXT    NOT NULL DEFAULT 'Abierta'
+                     CHECK (estado IN ('Abierta','En proceso','Cerrada')),
+  notas_tic          TEXT,
+  atendida_por_id    INTEGER REFERENCES usuario_sistema(id),
+  fecha_reporte      TEXT    NOT NULL DEFAULT (datetime('now')),
+  fecha_actualizacion TEXT,
+  fecha_cierre       TEXT
 );
 
 CREATE TABLE IF NOT EXISTS mantenimiento (
@@ -175,6 +183,8 @@ CREATE INDEX IF NOT EXISTS idx_prestamo_empleado ON prestamo(empleado_id);
 CREATE INDEX IF NOT EXISTS idx_prestamo_estado ON prestamo(estado);
 CREATE INDEX IF NOT EXISTS idx_prestamo_retiro ON prestamo(retiro_id);
 CREATE INDEX IF NOT EXISTS idx_retiro_empleado ON retiro(empleado_id);
+CREATE INDEX IF NOT EXISTS idx_incidencia_prestamo ON incidencia(prestamo_id);
+CREATE INDEX IF NOT EXISTS idx_incidencia_estado ON incidencia(estado);
 CREATE INDEX IF NOT EXISTS idx_log_fecha ON log_auditoria(fecha);
 `;
 

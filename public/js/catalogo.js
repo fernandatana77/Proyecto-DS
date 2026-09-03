@@ -290,7 +290,7 @@
     cargarMisPrestamos();
   });
 
-  // ---------- HU04: mis equipos prestados ----------
+  // ---------- HU04 + HU03: mis equipos prestados ----------
   const seccionPrestamos = $('mis-prestamos');
   const listaPrestamos = $('mis-prestamos-lista');
 
@@ -300,13 +300,24 @@
     const info = el('div', 'mi-prestamo-info');
     info.appendChild(el('div', 'tarjeta-nombre', p.equipoNombre));
     info.appendChild(el('div', 'tarjeta-codigo', `${p.equipoCodigo} · ${p.categoria}`));
+    if (p.incidenciasAbiertas > 0) {
+      const badge = el('span', 'badge badge-warn');
+      badge.style.marginTop = '4px';
+      badge.innerHTML =
+        `<span class="punto"></span>${p.incidenciasAbiertas} incidencia${p.incidenciasAbiertas > 1 ? 's' : ''} en revisión`;
+      info.appendChild(badge);
+    }
 
     const accion = el('div', 'mi-prestamo-accion');
+
+    const btnInc = el('button', 'btn btn-secundario', 'Reportar incidencia');
+    btnInc.addEventListener('click', () => abrirModalIncidencia(p));
+    accion.appendChild(btnInc);
+
     if (p.devolucionSolicitada) {
       const badge = el('span', 'badge badge-ok');
       badge.innerHTML = '<span class="punto"></span>Devolución solicitada';
       accion.appendChild(badge);
-      accion.appendChild(el('span', 'tarjeta-categoria', 'Entrégalo en el área de TIC'));
     } else {
       const boton = el('button', 'btn btn-primario', 'Solicitar devolución');
       boton.addEventListener('click', async () => {
@@ -329,6 +340,63 @@
     fila.append(info, accion);
     return fila;
   }
+
+  // ---------- HU03: modal de reporte de incidencia ----------
+  const modalInc = $('modal-incidencia');
+  const incDescripcion = $('inc-descripcion');
+  const incAviso = $('inc-aviso');
+  let prestamoIncidencia = null;
+  let enviandoInc = false;
+
+  function abrirModalIncidencia(p) {
+    prestamoIncidencia = p;
+    incAviso.hidden = true;
+    incDescripcion.value = '';
+    $('inc-paso-form').hidden = false;
+    $('inc-paso-ok').hidden = true;
+    $('inc-subtitulo').textContent = `${p.equipoNombre} · ${p.equipoCodigo}`;
+    modalInc.hidden = false;
+    incDescripcion.focus();
+  }
+
+  function cerrarModalIncidencia() {
+    modalInc.hidden = true;
+    prestamoIncidencia = null;
+  }
+
+  $('btn-cancelar-inc').addEventListener('click', cerrarModalIncidencia);
+  modalInc.addEventListener('click', (e) => {
+    if (e.target === modalInc) cerrarModalIncidencia();
+  });
+  $('btn-cerrar-inc-ok').addEventListener('click', () => {
+    cerrarModalIncidencia();
+    cargarMisPrestamos();
+  });
+
+  $('btn-enviar-inc').addEventListener('click', async () => {
+    if (enviandoInc || !prestamoIncidencia) return;
+    const texto = incDescripcion.value.trim();
+    if (texto.length < 5) {
+      incAviso.textContent = 'Describe el problema con un poco más de detalle.';
+      incAviso.hidden = false;
+      return;
+    }
+    enviandoInc = true;
+    $('btn-enviar-inc').disabled = true;
+    incAviso.hidden = true;
+    try {
+      const respuesta = await API.reportarIncidencia(prestamoIncidencia.prestamoId, texto);
+      $('inc-texto-ok').textContent = respuesta.mensaje;
+      $('inc-paso-form').hidden = true;
+      $('inc-paso-ok').hidden = false;
+    } catch (error) {
+      incAviso.textContent = error.mensaje || 'No se pudo reportar la incidencia.';
+      incAviso.hidden = false;
+    } finally {
+      enviandoInc = false;
+      $('btn-enviar-inc').disabled = false;
+    }
+  });
 
   async function cargarMisPrestamos() {
     try {

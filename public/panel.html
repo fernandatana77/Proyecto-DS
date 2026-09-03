@@ -23,11 +23,30 @@
 
     <div id="aviso-global" class="aviso info" hidden></div>
 
-    <h2 class="titulo-seccion">Devoluciones pendientes <span id="contador-pendientes" class="contador"></span></h2>
-    <p class="sub-seccion">Los equipos que el empleado ya solicitó devolver aparecen primero.</p>
+    <nav class="tabs" id="tabs-panel">
+      <button class="tab activo" data-vista="devoluciones">Devoluciones pendientes <span id="contador-pendientes" class="contador"></span></button>
+      <button class="tab" data-vista="incidencias">Incidencias <span id="contador-incidencias" class="contador"></span></button>
+    </nav>
 
-    <div id="lista-pendientes" class="lista-pendientes"></div>
-    <p id="vacio" class="vacio" hidden>No hay equipos prestados pendientes de devolución.</p>
+    <!-- Vista: devoluciones -->
+    <section id="vista-devoluciones">
+      <p class="sub-seccion">Los equipos que el empleado ya solicitó devolver aparecen primero.</p>
+      <div id="lista-pendientes" class="lista-pendientes"></div>
+      <p id="vacio-dev" class="vacio" hidden>No hay equipos prestados pendientes de devolución.</p>
+    </section>
+
+    <!-- Vista: incidencias (HU03) -->
+    <section id="vista-incidencias" hidden>
+      <p class="sub-seccion">El empleado solo describe el problema. Aquí TIC clasifica la severidad y mueve el estado.</p>
+      <div class="tabs" id="filtros-incidencias">
+        <button class="tab activo" data-estado="">Todas</button>
+        <button class="tab" data-estado="Abierta">Abiertas</button>
+        <button class="tab" data-estado="En proceso">En proceso</button>
+        <button class="tab" data-estado="Cerrada">Cerradas</button>
+      </div>
+      <div id="lista-incidencias" class="lista-pendientes"></div>
+      <p id="vacio-inc" class="vacio" hidden>No hay incidencias que coincidan con el filtro.</p>
+    </section>
   </div>
 
   <!-- Modal: certificar recepción (checklist EDITABLE por TIC) -->
@@ -38,14 +57,16 @@
         <p class="subtitulo" id="cert-subtitulo"></p>
         <div id="cert-aviso" class="aviso error" hidden></div>
 
+        <div id="cert-incidencias" class="aviso warn" hidden></div>
+
         <p class="sub-seccion">Registre el estado real de cada componente al recibir el equipo:</p>
         <div id="cert-checklist"></div>
 
         <label for="cert-obs">Observaciones de la recepción</label>
         <textarea id="cert-obs" rows="2" placeholder="Detalles de lo constatado"></textarea>
 
-        <p class="nota-rn04">Marcar <strong>Malo</strong> en cualquier componente envía el equipo a
-        "En Reparación" automáticamente (RN04).</p>
+        <p class="nota-rn04">Marcar <strong>Malo</strong> en cualquier componente (o si hay una
+        incidencia abierta) envía el equipo a "En Reparación" automáticamente (RN04).</p>
 
         <div class="acciones-modal">
           <button class="btn btn-secundario" id="btn-cancelar-cert">Cancelar</button>
@@ -58,6 +79,50 @@
         <div class="aviso ok" id="cert-texto-ok"></div>
         <div class="acciones-modal">
           <button class="btn btn-primario" id="btn-cerrar-cert-ok">Entendido</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Modal: triage de incidencia (HU03) -->
+  <div id="modal-triage" class="modal-fondo" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="tri-titulo">
+      <section id="tri-paso-form">
+        <h2 id="tri-titulo">Atender incidencia</h2>
+        <p class="subtitulo" id="tri-subtitulo"></p>
+        <div id="tri-aviso" class="aviso error" hidden></div>
+
+        <p class="etiqueta-bloque">Reportado por el empleado</p>
+        <blockquote id="tri-descripcion" class="cita"></blockquote>
+
+        <p class="etiqueta-bloque">Severidad</p>
+        <div class="opciones-estado" id="tri-severidad">
+          <button type="button" class="opcion" data-sev="baja">Baja</button>
+          <button type="button" class="opcion" data-sev="media">Media</button>
+          <button type="button" class="opcion" data-sev="alta">Alta</button>
+        </div>
+
+        <p class="etiqueta-bloque">Estado</p>
+        <div class="opciones-estado" id="tri-estado">
+          <button type="button" class="opcion" data-est="Abierta">Abierta</button>
+          <button type="button" class="opcion" data-est="En proceso">En proceso</button>
+          <button type="button" class="opcion" data-est="Cerrada">Cerrada</button>
+        </div>
+
+        <label for="tri-notas">Notas de TIC (diagnóstico, seguimiento)</label>
+        <textarea id="tri-notas" rows="3" placeholder="Qué se revisó, qué se hará..."></textarea>
+
+        <div class="acciones-modal">
+          <button class="btn btn-secundario" id="btn-cancelar-tri">Cancelar</button>
+          <button class="btn btn-primario" id="btn-guardar-tri">Guardar</button>
+        </div>
+      </section>
+
+      <section id="tri-paso-ok" hidden>
+        <h2>Incidencia actualizada</h2>
+        <div class="aviso ok" id="tri-texto-ok"></div>
+        <div class="acciones-modal">
+          <button class="btn btn-primario" id="btn-cerrar-tri-ok">Entendido</button>
         </div>
       </section>
     </div>
