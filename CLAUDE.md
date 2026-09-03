@@ -182,23 +182,104 @@ vuelven casos de prueba funcionales.
 | Empleado **solicita** devolución | `/` → PIN → `catalogo.html` → banner **"Tienes N equipos prestados"** (arriba de todo) → "Solicitar devolución" |
 | TIC certifica la recepción | `/` → enlace **"¿Eres del área de TIC? Inicia sesión aquí"** → `staff.html` → usuario/contraseña → `panel.html` → "Certificar recepción" |
 
-### Estado actual
+### Estado: qué está completo y verificado
 
-- ✅ **HU01 + HU02** completos (backend + PWA).
-- ✅ **HU04** completo (backend + PWA): solicitud del empleado + panel de TIC con
-  checklist de recepción editable + RN04. `tests/flujoRetiro.test.js` (13 casos),
-  verificado en navegador.
-- 🔜 Pendiente: HU03 (`/api/incidencias`), HU06 (`/api/logs`), HU05 (`/api/dashboard`),
-  endpoint de edición directa de `componente_equipo` por TIC (`/api/equipos/:id/componentes`).
+Al cierre de la sesión del **2026-09-02** (commit inicial `f6ab15c`):
+
+| HU | Estado | Verificación |
+|----|--------|--------------|
+| **HU01** Retiro con PIN | ✅ backend + PWA | tests + navegador |
+| **HU02** Catálogo y estado de asignación | ✅ backend + PWA | tests + navegador |
+| **HU04** Devolución + checklist de recepción | ✅ backend + PWA | tests + navegador |
+| HU03 Incidencias | ⛔ no empezada | — |
+| HU05 Dashboard / vida útil | ⛔ no empezada (`DepreciacionService` ya existe) | — |
+| HU06 Bitácora de logs | ⛔ no empezada (`AuditoriaService.consultar` ya existe) | — |
+
+**Pruebas automáticas** — `npm test` → `tests/flujoRetiro.test.js`, **13/13**:
+
+1. HU01: retiro multi-equipo → préstamos formalizados y equipos `Prestado`.
+2. RN02: PIN de aceptación incorrecto → no se formaliza nada del retiro.
+3. RN01: si un equipo del carrito no está `Disponible` se rechaza **todo** el retiro.
+4. El checklist de salida es la foto de `componente_equipo` (el empleado no lo fija).
+5. RN04: devolución con daño en recepción → equipo `En Reparación`, retiro `Devuelto`.
+6. RN04: devolución sin daño → equipo vuelve a `Disponible`.
+7. Retiro parcial: al devolver 1 de 2 equipos, el retiro queda `Parcial`.
+8. HU04 paso 1: el empleado solicita la devolución (marca el préstamo, no lo cierra; idempotente).
+9. HU04 paso 1: un empleado no puede solicitar la devolución de un préstamo ajeno.
+10. HU04: la cola de pendientes de TIC pone las devoluciones solicitadas primero.
+11. RF07 / RN03: `log_auditoria` no se puede `UPDATE` ni `DELETE` (triggers de BD).
+12. RNF05: 3 intentos de PIN fallidos activan el bloqueo.
+13. Validación: retiro sin equipos / con ids duplicados.
+
+**Prueba manual en navegador** (Chrome, Node 22, `npm run seed`): los tres flujos
+de punta a punta — empleado retira 2 equipos, empleado pulsa "Solicitar
+devolución" (banner), staff entra por `staff.html` y certifica en `panel.html`
+marcando un componente `Malo` → el equipo pasa a `En Reparación` (RN04).
+
+### Qué falta, en orden
+
+1. **HU04 — pulido opcional**: hoy el préstamo se puede certificar aunque el
+   empleado no lo haya "solicitado" (la solicitud solo reordena la cola). Si el
+   enunciado exige que la solicitud sea obligatoria, añadir esa validación.
+2. **HU03 — Incidencias** (`incidencia` ya existe en el esquema):
+   `POST /api/incidencias` (empleado, authPIN, sobre un préstamo activo suyo) +
+   `IncidenciaService`. Al reportarse, `RN04` ya considera "incidencia abierta"
+   en la devolución — verificar ese enganche. Pantalla en `catalogo.html`
+   (acción por equipo del banner de "mis equipos prestados").
+3. **HU06 — Bitácora** (`AuditoriaService.consultar` ya está):
+   `GET /api/logs` con filtros (acción, entidad, rango de fechas, paginación),
+   `authJWT` solo staff. Pantalla nueva o pestaña en `panel.html`. **Solo lectura.**
+4. **HU05 — Dashboard** (`DepreciacionService.calcularVidaUtil` ya está):
+   `GET /api/dashboard` (equipos por estado, préstamos activos, top vida útil
+   consumida, alertas de reparación). Pantalla con gráficos simples.
+5. **Edición del estado físico por TIC**: `PATCH /api/equipos/:id/componentes`
+   (`authJWT` staff) para que Admin/Técnico ajusten `componente_equipo` fuera de
+   una devolución (alta de equipo, mantenimiento). Hoy solo se actualiza al
+   certificar una recepción.
+6. **Migraciones**: si el proyecto va más allá de la demo, reemplazar el
+   `DROP + CREATE` del seed por migraciones incrementales.
+
+### Decisiones de diseño de esta sesión (no evidentes solo en el código)
+
+- **El estado físico lo mantiene TIC, no el empleado.** Corrección de un diseño
+  inicial que dejaba al empleado marcar bueno/regular/malo en el préstamo. Ahora
+  vive en `componente_equipo` (editable solo por Admin/Técnico) y el empleado lo
+  ve en **solo lectura**. El checklist de salida es una *foto* de ese estado.
+- **Componentes por categoría, no una lista global.** Un mouse no tiene
+  "pantalla". `COMPONENTES_POR_CATEGORIA` define el set por categoría de equipo;
+  se instancian en `componente_equipo` al crear el equipo (hoy solo el seed).
+- **Carrito de "retiro" con cabecera propia.** Se eligió una tabla `retiro`
+  (no un UUID de grupo en `prestamo`) para tener dónde colgar la aceptación por
+  PIN, el estado `Activo/Parcial/Devuelto` y datos a nivel de operación. Un
+  `POST /api/retiros` reemplazó al viejo `POST /api/prestamos`.
+- **RN01 sobre el carrito: todo o nada.** Si un solo equipo del carrito no está
+  `Disponible`, se rechaza el retiro completo (no se prestan los demás).
+- **Devolución en 2 pasos y 2 roles.** El empleado *solicita* (no evalúa nada);
+  TIC *certifica la recepción* con el checklist editable y dispara RN04. Fue
+  necesario añadir `prestamo.devolucion_solicitada` y las pantallas
+  `staff.html` + `panel.html`, porque no había forma de entrar como staff ni de
+  llegar a la devolución desde la interfaz.
+- **`node:sqlite` requiere Node ≥ 22.5.** El entorno tenía Node 20; se instaló
+  Node 22.11 vía nvm-windows. Los scripts de npm llevan `--experimental-sqlite`.
+- **PIN solo (sin identificador).** Por eso el bloqueo de RNF05 es **por IP** y
+  el hash del PIN es un **HMAC determinista** (permite `UNIQUE` y lookup O(1)),
+  no bcrypt/scrypt. Las contraseñas de staff sí usan `scrypt`.
+- **Inmutabilidad de la bitácora reforzada en la BD**, no solo en el código:
+  triggers `BEFORE UPDATE/DELETE` con `RAISE(ABORT)` en `log_auditoria`.
+- **Tema visual:** login (`index.html`, `staff.html`) oscuro; app
+  (`catalogo.html`, `panel.html`) clara. `service-worker.js` cachea el shell
+  (cache-first) y **nunca** `/api/*`. Al cambiar assets hay que subir `CACHE`
+  (va por `inv-tic-vN`).
 
 ## Convenciones de código
 
 - **Nombres en español**, descriptivos y consistentes con las entidades del DER
   (`registrarRetiroConPin`, `asegurarEquipoPrestable`, `checklistSalida`, no
   `createLoan` ni `data`).
-- Componente físico en el frontend: siempre **solo lectura** (colores fijos
-  verde/amarillo/rojo, sin controles). El helper es `renderChecklistLectura` en
-  `public/js/catalogo.js`; reutilizarlo en la pantalla de devolución (HU04).
+- Componente físico en el frontend: para el **empleado** siempre **solo lectura**
+  (`renderChecklistLectura` en `public/js/catalogo.js`, colores fijos
+  verde/amarillo/rojo, sin controles). El único checklist **editable** es el de
+  recepción en `public/js/panel.js`, y solo lo usa el staff.
 - Cada método de `controllers/` va envuelto en `try/catch` y termina en
   `next(error)`; nunca deja escapar una excepción sin traducir.
 - Errores de negocio: lanzar `new ErrorAplicacion(mensaje, codigoHttp, codigo)`
