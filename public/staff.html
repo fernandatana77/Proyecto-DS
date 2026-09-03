@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" href="/iconos/icono.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/css/estilos.css" />
+  <title>Inventario TIC - Ingreso staff</title>
+</head>
+<body>
+  <div id="estado-conexion" class="estado-conexion" hidden>Sin conexion - modo offline</div>
+
+  <main class="login-pin">
+    <img src="/iconos/icono.svg" alt="Inventario TIC" />
+    <h1>Área de TIC</h1>
+    <p>Ingreso para Administrador / Técnico</p>
+
+    <form id="form-staff" class="form-staff" autocomplete="off">
+      <label for="usuario">Usuario</label>
+      <input type="text" id="usuario" name="usuario" autocapitalize="none" autocomplete="username" required />
+
+      <label for="password">Contraseña</label>
+      <input type="password" id="password" name="password" autocomplete="current-password" required />
+
+      <div id="aviso" class="aviso error" hidden></div>
+
+      <button type="submit" class="btn btn-primario btn-bloque" id="btn-ingresar">Ingresar</button>
+    </form>
+
+    <a class="enlace-staff" href="/">← Volver al ingreso con PIN</a>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/staffLogin.js"></script>
+  <script src="/js/pwa.js"></script>
+</body>
+</html>

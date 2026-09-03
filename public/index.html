@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" href="/iconos/icono.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/css/estilos.css" />
+  <title>Inventario TIC - Ingreso</title>
+</head>
+<body>
+  <div id="estado-conexion" class="estado-conexion" hidden>Sin conexion - modo offline</div>
+
+  <main class="login-pin">
+    <img src="/iconos/icono.svg" alt="Inventario TIC" />
+    <h1>Inventario TIC</h1>
+    <p>Ingrese su PIN de 6 digitos</p>
+
+    <div id="pin-puntos" class="pin-puntos" aria-label="PIN">
+      <span class="pin-punto"></span>
+      <span class="pin-punto"></span>
+      <span class="pin-punto"></span>
+      <span class="pin-punto"></span>
+      <span class="pin-punto"></span>
+      <span class="pin-punto"></span>
+    </div>
+
+    <div id="aviso" class="aviso error" hidden></div>
+
+    <div class="teclado" id="teclado">
+      <button class="tecla" data-tecla="1">1</button>
+      <button class="tecla" data-tecla="2">2</button>
+      <button class="tecla" data-tecla="3">3</button>
+      <button class="tecla" data-tecla="4">4</button>
+      <button class="tecla" data-tecla="5">5</button>
+      <button class="tecla" data-tecla="6">6</button>
+      <button class="tecla" data-tecla="7">7</button>
+      <button class="tecla" data-tecla="8">8</button>
+      <button class="tecla" data-tecla="9">9</button>
+      <button class="tecla accion" data-tecla="limpiar">Limpiar</button>
+      <button class="tecla" data-tecla="0">0</button>
+      <button class="tecla accion" data-tecla="borrar">&#9003;</button>
+    </div>
+
+    <a class="enlace-staff" href="/staff.html">¿Eres del área de TIC? Inicia sesión aquí</a>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/login.js"></script>
+  <script src="/js/pwa.js"></script>
+</body>
+</html>

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0284c7" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" href="/iconos/icono.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/css/estilos.css" />
+  <title>Inventario TIC - Catalogo</title>
+</head>
+<body>
+  <div id="estado-conexion" class="estado-conexion" hidden>Sin conexion - modo offline</div>
+
+  <div class="contenedor">
+    <header class="encabezado">
+      <div>
+        <h1>Catalogo de equipos</h1>
+        <p class="sub" id="saludo-empleado"></p>
+      </div>
+      <button class="btn btn-secundario" id="btn-salir">Salir</button>
+    </header>
+
+    <div id="aviso-global" class="aviso info" hidden></div>
+
+    <!-- HU04 - banner de equipos que el empleado tiene prestados -->
+    <section id="mis-prestamos" class="banner-prestamos" hidden>
+      <div class="banner-prestamos-cab">
+        <h2 id="mis-prestamos-titulo">Tienes equipos prestados</h2>
+        <p>Cuando termines de usarlos, pulsa <strong>Solicitar devolución</strong> y entrégalos al área de TIC.</p>
+      </div>
+      <div id="mis-prestamos-lista" class="mis-prestamos-lista"></div>
+    </section>
+
+    <nav class="tabs" id="tabs"></nav>
+
+    <div id="contenido"></div>
+    <p id="vacio" class="vacio" hidden>No hay equipos en esta categoria.</p>
+  </div>
+
+  <!-- Barra del carrito de retiro -->
+  <div id="barra-carrito" class="barra-carrito" hidden>
+    <div class="interior">
+      <div class="conteo" id="carrito-conteo"></div>
+      <button class="btn btn-primario" id="btn-revisar">Revisar retiro</button>
+    </div>
+  </div>
+
+  <!-- Modal: detalle de estado de UN equipo (solo lectura) -->
+  <div id="modal-estado" class="modal-fondo" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="estado-titulo">
+      <h2 id="estado-titulo">Estado del equipo</h2>
+      <p class="subtitulo" id="estado-subtitulo"></p>
+      <div id="estado-checklist"></div>
+      <div class="acciones-modal">
+        <button class="btn btn-secundario" id="btn-cerrar-estado">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: resumen del retiro + aceptacion con PIN (HU01 / RN02) -->
+  <div id="modal-retiro" class="modal-fondo" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="retiro-titulo">
+      <section id="retiro-paso-resumen">
+        <h2 id="retiro-titulo">Resumen del retiro</h2>
+        <p class="subtitulo" id="retiro-subtitulo"></p>
+        <div id="retiro-aviso" class="aviso error" hidden></div>
+
+        <div id="retiro-items"></div>
+
+        <label class="confirmacion-check" for="retiro-confirmo">
+          <input type="checkbox" id="retiro-confirmo" />
+          <span>Confirmo que recibo el o los equipos en el estado fisico indicado.</span>
+        </label>
+
+        <label for="retiro-pin">PIN de 6 digitos</label>
+        <input type="password" id="retiro-pin" class="pin-grande" inputmode="numeric" maxlength="6" autocomplete="off" aria-label="PIN de 6 digitos" />
+
+        <div class="acciones-modal">
+          <button class="btn btn-secundario" id="btn-cancelar-retiro">Cancelar</button>
+          <button class="btn btn-primario" id="btn-confirmar-retiro" disabled>Aceptar y registrar</button>
+        </div>
+      </section>
+
+      <section id="retiro-paso-ok" hidden>
+        <h2>Retiro registrado</h2>
+        <div class="aviso ok" id="retiro-texto-ok"></div>
+        <div class="acciones-modal">
+          <button class="btn btn-primario" id="btn-cerrar-ok">Entendido</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/iconos.js"></script>
+  <script src="/js/catalogo.js"></script>
+  <script src="/js/pwa.js"></script>
+</body>
+</html>

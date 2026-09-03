@@ -1,0 +1,27 @@
+{
+  "name": "sistema-trazabilidad-inventario-tic",
+  "version": "1.0.0",
+  "description": "Sistema de Trazabilidad e Inventario TIC Multi-Sede (API REST + PWA offline-first)",
+  "main": "servidor.js",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "start": "node --experimental-sqlite --env-file=.env servidor.js",
+    "dev": "node --experimental-sqlite --env-file=.env --watch servidor.js",
+    "seed": "node --experimental-sqlite --env-file=.env scripts/seed.js",
+    "test": "node --test --experimental-sqlite \"tests/**/*.test.js\""
+  },
+  "keywords": [
+    "inventario",
+    "tic",
+    "prestamos",
+    "auditoria",
+    "pwa"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2"
+  }
+}

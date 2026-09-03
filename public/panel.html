@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0284c7" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" href="/iconos/icono.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/css/estilos.css" />
+  <title>Inventario TIC - Panel</title>
+</head>
+<body>
+  <div id="estado-conexion" class="estado-conexion" hidden>Sin conexion - modo offline</div>
+
+  <div class="contenedor">
+    <header class="encabezado">
+      <div>
+        <h1>Panel de TIC</h1>
+        <p class="sub" id="saludo-staff"></p>
+      </div>
+      <button class="btn btn-secundario" id="btn-salir">Salir</button>
+    </header>
+
+    <div id="aviso-global" class="aviso info" hidden></div>
+
+    <h2 class="titulo-seccion">Devoluciones pendientes <span id="contador-pendientes" class="contador"></span></h2>
+    <p class="sub-seccion">Los equipos que el empleado ya solicitó devolver aparecen primero.</p>
+
+    <div id="lista-pendientes" class="lista-pendientes"></div>
+    <p id="vacio" class="vacio" hidden>No hay equipos prestados pendientes de devolución.</p>
+  </div>
+
+  <!-- Modal: certificar recepción (checklist EDITABLE por TIC) -->
+  <div id="modal-cert" class="modal-fondo" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="cert-titulo">
+      <section id="cert-paso-form">
+        <h2 id="cert-titulo">Certificar recepción</h2>
+        <p class="subtitulo" id="cert-subtitulo"></p>
+        <div id="cert-aviso" class="aviso error" hidden></div>
+
+        <p class="sub-seccion">Registre el estado real de cada componente al recibir el equipo:</p>
+        <div id="cert-checklist"></div>
+
+        <label for="cert-obs">Observaciones de la recepción</label>
+        <textarea id="cert-obs" rows="2" placeholder="Detalles de lo constatado"></textarea>
+
+        <p class="nota-rn04">Marcar <strong>Malo</strong> en cualquier componente envía el equipo a
+        "En Reparación" automáticamente (RN04).</p>
+
+        <div class="acciones-modal">
+          <button class="btn btn-secundario" id="btn-cancelar-cert">Cancelar</button>
+          <button class="btn btn-primario" id="btn-registrar-cert">Registrar devolución</button>
+        </div>
+      </section>
+
+      <section id="cert-paso-ok" hidden>
+        <h2>Devolución registrada</h2>
+        <div class="aviso ok" id="cert-texto-ok"></div>
+        <div class="acciones-modal">
+          <button class="btn btn-primario" id="btn-cerrar-cert-ok">Entendido</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/iconos.js"></script>
+  <script src="/js/panel.js"></script>
+  <script src="/js/pwa.js"></script>
+</body>
+</html>
