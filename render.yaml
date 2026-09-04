@@ -1,0 +1,42 @@
+# Blueprint de Render (https://render.com) - despliegue de la Actividad 3.
+# Importar desde el panel de Render: New > Blueprint > (repo) > este archivo.
+#
+# NOTA sobre la base de datos (SQLite en archivo):
+#   - Plan free: el disco es efimero. En cada redeploy la BD se borra y el
+#     servidor la vuelve a sembrar con los datos demo (ver scripts/seed.js +
+#     servidor.js). Los prestamos/incidencias creados durante una demo NO
+#     sobreviven a un redeploy. Para la entrega de la actividad es suficiente.
+#   - Para persistir de verdad: subir a un plan con disco, descomentar el bloque
+#     `disk:` de abajo y poner DB_RUTA=/var/data/inventario.db
+
+services:
+  - type: web
+    name: inventario-tic
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/salud
+    autoDeploy: true
+    envVars:
+      - key: ENTORNO
+        value: produccion
+      - key: NODE_ENV
+        value: production
+      # Render genera un valor aleatorio y seguro una sola vez (no cambia en redeploys).
+      - key: JWT_SECRET
+        generateValue: true
+      - key: PIN_PEPPER
+        generateValue: true
+      - key: DB_RUTA
+        value: ./data/inventario.db
+      # - key: SEMBRAR_DEMO      # poner "off" para NO cargar datos demo al arrancar
+      #   value: "off"
+
+    # --- Persistencia real (requiere plan de pago) ---
+    # disk:
+    #   name: datos
+    #   mountPath: /var/data
+    #   sizeGB: 1
+    # (y cambiar DB_RUTA a /var/data/inventario.db)

@@ -4,12 +4,12 @@
   "description": "Sistema de Trazabilidad e Inventario TIC Multi-Sede (API REST + PWA offline-first)",
   "main": "servidor.js",
   "engines": {
-    "node": ">=22.5.0"
+    "node": "22.x"
   },
   "scripts": {
-    "start": "node --experimental-sqlite --env-file=.env servidor.js",
-    "dev": "node --experimental-sqlite --env-file=.env --watch servidor.js",
-    "seed": "node --experimental-sqlite --env-file=.env scripts/seed.js",
+    "start": "node --experimental-sqlite --env-file-if-exists=.env servidor.js",
+    "dev": "node --experimental-sqlite --env-file-if-exists=.env --watch servidor.js",
+    "seed": "node --experimental-sqlite --env-file-if-exists=.env scripts/seed.js",
     "test": "node --test --experimental-sqlite \"tests/**/*.test.js\""
   },
   "keywords": [

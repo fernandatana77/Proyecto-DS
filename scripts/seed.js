@@ -102,23 +102,35 @@ function crearEquipoConComponentes(def) {
   return equipo;
 }
 
-function ejecutar() {
+/**
+ * Carga los datos demo.
+ * @param {{ recrear?: boolean }} opciones  recrear = DROP + CREATE de las tablas
+ *        (uso normal de `npm run seed` en desarrollo). Sin recrear, solo inserta
+ *        (uso del arranque automatico cuando la BD esta vacia, p. ej. un deploy nuevo).
+ */
+function sembrarDatosDemo({ recrear = false } = {}) {
   const db = obtenerConexion();
-  recrearEsquema(db);
+  if (recrear) recrearEsquema(db);
+  else ejecutarMigraciones();
 
   for (const emp of EMPLEADOS) empleadoModel.crear({ ...emp, pinHash: hashPin(emp.pin) });
   for (const c of STAFF) usuarioSistemaModel.crear({ usuario: c.usuario, passwordHash: hashPassword(c.password), rol: c.rol });
   for (const def of EQUIPOS) crearEquipoConComponentes(def);
 
-  const porCategoria = EQUIPOS.reduce((acc, e) => {
-    acc[e.categoria] = (acc[e.categoria] || 0) + 1;
-    return acc;
-  }, {});
+  return {
+    empleados: EMPLEADOS.length,
+    staff: STAFF.length,
+    equipos: EQUIPOS.length,
+  };
+}
 
+module.exports = { sembrarDatosDemo };
+
+// Ejecucion directa: `npm run seed` -> recrea el esquema y carga todo.
+if (require.main === module) {
+  const resumen = sembrarDatosDemo({ recrear: true });
   console.log('Seed completado.');
   console.log('  Empleados (PIN):', EMPLEADOS.map((e) => `${e.nombres} ${e.apellidos} -> ${e.pin}`).join(' | '));
   console.log('  Staff:', STAFF.map((s) => `${s.usuario}/${s.password} (${s.rol})`).join(' | '));
-  console.log('  Equipos por categoria:', JSON.stringify(porCategoria));
+  console.log(`  Equipos: ${resumen.equipos}`);
 }
-
-ejecutar();

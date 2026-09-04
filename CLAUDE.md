@@ -46,8 +46,9 @@ npm test          # toda la suite (node --test)
 node --test --experimental-sqlite tests/flujoRetiro.test.js   # un solo archivo
 ```
 
-Copiar `.env.example` a `.env` antes de arrancar. En **producción** el arranque
-falla si `JWT_SECRET` o `PIN_PEPPER` conservan el valor de ejemplo.
+En local: copiar `.env.example` a `.env`. Los scripts usan `--env-file-if-exists`,
+así que si no hay `.env` (p. ej. en un hosting) arrancan igual y toman las
+variables del entorno.
 
 `npm run seed` hace **DROP + CREATE** de todas las tablas salvo `log_auditoria`
 (inmutable): en desarrollo, cuando cambie el esquema en `models/esquema.js`, basta
@@ -57,6 +58,38 @@ volver a correr el seed. No hay sistema de migraciones incremental todavía.
 
 - Empleados (login solo con PIN): `123456`, `234567`, `345678`
 - Staff (usuario / contraseña): `admin / Admin123*` (Admin), `tecnico / Tecnico123*` (Técnico)
+
+## Despliegue (Render / cualquier hosting Node)
+
+- **Comando de arranque**: `npm start`
+  (`node --experimental-sqlite --env-file-if-exists=.env servidor.js`).
+- **Build**: `npm ci` (o `npm install`). **Node 22.x** (`engines.node` + `.node-version`);
+  el flag `--experimental-sqlite` es obligatorio en Node 22.
+- **Health check**: `GET /api/salud`.
+- **Puerto**: `servidor.js` escucha en `process.env.PORT` (lo inyecta el hosting);
+  en local usa `PUERTO` o 3000.
+- **`app.set('trust proxy', true)`** ya está: `req.ip` (usado por `rateLimitPIN`)
+  toma la IP real del `X-Forwarded-For` detrás del proxy del hosting.
+- **Auto-seed**: al arrancar, si `usuario_sistema` está vacía, `servidor.js` carga
+  los datos demo (`scripts/seed.js` → `sembrarDatosDemo`). Se desactiva con
+  `SEMBRAR_DEMO=off`.
+- **SQLite / persistencia**: en un plan sin disco persistente (p. ej. Render free)
+  el archivo `data/inventario.db` se borra en cada redeploy y el auto-seed lo
+  vuelve a crear. Los préstamos/incidencias de una demo no sobreviven a un
+  redeploy. Para persistir: plan con disco + `DB_RUTA` apuntando al volumen.
+- **`render.yaml`** en la raíz es un Blueprint listo para importar en Render.
+
+### Variables de entorno
+
+| Variable | Obligatoria | Valor |
+|----------|-------------|-------|
+| `ENTORNO` | sí en prod | `produccion` (o `NODE_ENV=production`) — activa la validación estricta de secretos |
+| `JWT_SECRET` | **sí en prod** | cadena larga y aleatoria; el arranque falla si falta o es un valor de ejemplo |
+| `PIN_PEPPER` | **sí en prod** | cadena larga y aleatoria; si cambia, los PIN existentes dejan de validar |
+| `PORT` | la pone el hosting | puerto de escucha |
+| `DB_RUTA` | no | ruta del `.db` (default `./data/inventario.db`) |
+| `SEMBRAR_DEMO` | no | `off` para no cargar datos demo al arrancar con BD vacía |
+| `JWT_EXPIRACION_STAFF` / `JWT_EXPIRACION_EMPLEADO` | no | `8h` / `20m` por defecto |
 
 ## Arquitectura
 

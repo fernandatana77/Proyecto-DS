@@ -7,8 +7,9 @@ prestamos de equipos TIC con autenticacion por PIN.
 
 ## Requisitos
 
-- **Node.js >= 22.5.0** (usa el modulo nativo `node:sqlite`).
-  Con `nvm-windows`: `nvm install 22.11.0 && nvm use 22.11.0`
+- **Node.js 22.x** (usa el modulo nativo `node:sqlite`; el flag `--experimental-sqlite`
+  es obligatorio en Node 22 y ya va en los scripts de npm).
+  Con `nvm-windows`: `nvm install 22 && nvm use 22`
 
 ## Puesta en marcha
 
@@ -18,6 +19,31 @@ npm install
 npm run seed              # DROP + CREATE + datos demo en data/inventario.db
 npm run dev               # http://localhost:3000
 ```
+
+## Despliegue (Render u otro hosting Node)
+
+- **Build**: `npm ci` · **Start**: `npm start` · **Health check**: `GET /api/salud`
+- El servidor escucha en `process.env.PORT` (lo inyecta el hosting).
+- Al arrancar con la base vacia carga datos demo automaticamente (`SEMBRAR_DEMO=off`
+  lo desactiva).
+- En la raiz hay un **`render.yaml`** (Blueprint) listo para importar en Render.
+- SQLite en archivo: en un plan **sin disco persistente** (Render free) la base se
+  borra en cada redeploy y se vuelve a sembrar; para persistir de verdad hace falta
+  un disco y apuntar `DB_RUTA` a ese volumen.
+
+**Variables de entorno en produccion** (configurar en el panel del hosting):
+
+| Variable | | |
+|----------|---|---|
+| `ENTORNO=produccion` | obligatoria | activa la validacion estricta de secretos |
+| `JWT_SECRET` | **obligatoria** | cadena larga y aleatoria |
+| `PIN_PEPPER` | **obligatoria** | cadena larga y aleatoria (si cambia, los PIN dejan de validar) |
+| `DB_RUTA` | opcional | ruta del `.db` (default `./data/inventario.db`) |
+| `SEMBRAR_DEMO` | opcional | `off` para no cargar datos demo |
+
+> El arranque **falla a proposito** si `ENTORNO=produccion` y falta `JWT_SECRET`
+> o `PIN_PEPPER` (o tienen un valor de ejemplo). `render.yaml` los genera con
+> `generateValue: true`.
 
 ## Credenciales demo
 
