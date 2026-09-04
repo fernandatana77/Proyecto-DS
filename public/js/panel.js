@@ -50,7 +50,11 @@
     avisoGlobal.hidden = false;
   }
 
+  const esAdmin = perfil.rol === 'Admin';
+
   // ===================== Tabs =====================
+  if (esAdmin) $('tab-bitacora').hidden = false; // HU06 solo para el Administrador
+
   $('tabs-panel').addEventListener('click', (e) => {
     const tab = e.target.closest('.tab');
     if (!tab) return;
@@ -59,7 +63,9 @@
     const vista = tab.dataset.vista;
     $('vista-devoluciones').hidden = vista !== 'devoluciones';
     $('vista-incidencias').hidden = vista !== 'incidencias';
+    $('vista-bitacora').hidden = vista !== 'bitacora';
     if (vista === 'incidencias') cargarIncidencias();
+    if (vista === 'bitacora') cargarBitacora();
   });
 
   // ===================== HU04: devoluciones =====================
@@ -342,6 +348,135 @@
       enviando = false;
       $('btn-guardar-tri').disabled = false;
     }
+  });
+
+  // ===================== HU06: bitácora de auditoría (solo Admin, solo lectura) =====================
+  const ACCION_CLASE = (accion) => {
+    if (/FALLIDO|BLOQUEADO/.test(accion)) return 'badge-bad';
+    if (/REPARACION|DEVUELT|DEVOLUCION/.test(accion)) return 'badge-warn';
+    if (/EXITOSO|REGISTRAD|REPORTADA/.test(accion)) return 'badge-ok';
+    return 'badge-neutro';
+  };
+  const ACTOR_CLASE = { Empleado: 'badge-info', Admin: 'badge-warn', 'Técnico': 'badge-neutro', Sistema: 'badge-neutro' };
+
+  let bitacoraPagina = 1;
+  let accionesCargadas = false;
+
+  function leerFiltrosBitacora() {
+    return {
+      desde: $('f-desde').value || '',
+      hasta: $('f-hasta').value || '',
+      usuario: $('f-usuario').value.trim(),
+      accion: $('f-accion').value,
+      actorTipo: $('f-actor-tipo').value,
+    };
+  }
+
+  function formatearFecha(iso) {
+    // la BD guarda 'YYYY-MM-DD HH:MM:SS' (UTC); se muestra en hora local
+    const d = new Date(iso.replace(' ', 'T') + 'Z');
+    return Number.isNaN(d.getTime()) ? iso : d.toLocaleString('es-EC', { dateStyle: 'short', timeStyle: 'medium' });
+  }
+
+  function formatearDetalle(detalle, ip) {
+    const partes = [];
+    if (detalle && typeof detalle === 'object') {
+      for (const [k, v] of Object.entries(detalle)) {
+        partes.push(`${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`);
+      }
+    }
+    if (ip) partes.push(`ip: ${ip}`);
+    return partes.length ? partes.join(' · ') : '—';
+  }
+
+  function filaBitacora(l) {
+    const tr = document.createElement('tr');
+
+    tr.appendChild(el('td', 'col-fecha', formatearFecha(l.fecha)));
+
+    const tdUsuario = el('td');
+    tdUsuario.appendChild(el('div', 'celda-principal', l.usuario));
+    tdUsuario.appendChild(badge(ACTOR_CLASE[l.actorTipo] || 'badge-neutro', l.actorTipo));
+    tr.appendChild(tdUsuario);
+
+    const tdAccion = el('td');
+    tdAccion.appendChild(badge(ACCION_CLASE(l.accion), l.accion));
+    tr.appendChild(tdAccion);
+
+    tr.appendChild(el('td', 'col-entidad', l.entidad ? `${l.entidad}${l.entidadId ? ' #' + l.entidadId : ''}` : '—'));
+    tr.appendChild(el('td', 'col-detalle', formatearDetalle(l.detalle, l.ip)));
+
+    return tr;
+  }
+
+  async function cargarAccionesFiltro() {
+    if (accionesCargadas) return;
+    try {
+      const { acciones } = await API.accionesBitacora();
+      const sel = $('f-accion');
+      acciones.forEach((a) => {
+        const opt = document.createElement('option');
+        opt.value = a;
+        opt.textContent = a;
+        sel.appendChild(opt);
+      });
+      accionesCargadas = true;
+    } catch {
+      /* el filtro de acción queda solo con "Todas" */
+    }
+  }
+
+  async function cargarBitacora() {
+    if (!esAdmin) return;
+    cargarAccionesFiltro();
+    $('aviso-bitacora').hidden = true;
+    const cuerpo = $('cuerpo-bitacora');
+    cuerpo.innerHTML = '<tr><td colspan="5" class="vacio">Cargando...</td></tr>';
+
+    const f = leerFiltrosBitacora();
+    const qs = new URLSearchParams();
+    Object.entries(f).forEach(([k, v]) => v && qs.set(k, v));
+    qs.set('pagina', bitacoraPagina);
+    qs.set('porPagina', 25);
+
+    try {
+      const r = await API.bitacora(`?${qs.toString()}`);
+      cuerpo.innerHTML = '';
+      $('vacio-bitacora').hidden = r.logs.length > 0;
+      r.logs.forEach((l) => cuerpo.appendChild(filaBitacora(l)));
+
+      const desde = r.total === 0 ? 0 : (r.pagina - 1) * r.porPagina + 1;
+      const hasta = Math.min(r.pagina * r.porPagina, r.total);
+      $('bitacora-rango').textContent = `${desde}–${hasta} de ${r.total}`;
+      $('paginacion-bitacora').hidden = r.total <= r.porPagina;
+      $('btn-bitacora-prev').disabled = r.pagina <= 1;
+      $('btn-bitacora-next').disabled = r.pagina >= r.paginas;
+    } catch (error) {
+      cuerpo.innerHTML = '';
+      $('aviso-bitacora').textContent = error.mensaje || 'No se pudo cargar la bitácora.';
+      $('aviso-bitacora').hidden = false;
+    }
+  }
+
+  $('filtros-bitacora').addEventListener('submit', (e) => {
+    e.preventDefault();
+    bitacoraPagina = 1;
+    cargarBitacora();
+  });
+  $('btn-limpiar-bitacora').addEventListener('click', () => {
+    $('filtros-bitacora').reset();
+    bitacoraPagina = 1;
+    cargarBitacora();
+  });
+  $('btn-bitacora-prev').addEventListener('click', () => {
+    if (bitacoraPagina > 1) {
+      bitacoraPagina -= 1;
+      cargarBitacora();
+    }
+  });
+  $('btn-bitacora-next').addEventListener('click', () => {
+    bitacoraPagina += 1;
+    cargarBitacora();
   });
 
   // ===================== arranque =====================

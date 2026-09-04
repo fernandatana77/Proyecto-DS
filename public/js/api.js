@@ -117,5 +117,9 @@ const API = (() => {
     incidencias: (params = '') => pedir(`/incidencias${params}`),
     triarIncidencia: (id, cambios) =>
       pedir(`/incidencias/${id}`, { metodo: 'PATCH', cuerpo: cambios }),
+
+    // --- Bitácora (HU06, solo Admin, solo lectura) ---
+    bitacora: (params = '') => pedir(`/logs${params}`),
+    accionesBitacora: () => pedir('/logs/acciones'),
   };
 })();

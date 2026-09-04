@@ -26,6 +26,7 @@
     <nav class="tabs" id="tabs-panel">
       <button class="tab activo" data-vista="devoluciones">Devoluciones pendientes <span id="contador-pendientes" class="contador"></span></button>
       <button class="tab" data-vista="incidencias">Incidencias <span id="contador-incidencias" class="contador"></span></button>
+      <button class="tab" id="tab-bitacora" data-vista="bitacora" hidden>Bitácora de auditoría</button>
     </nav>
 
     <!-- Vista: devoluciones -->
@@ -46,6 +47,60 @@
       </div>
       <div id="lista-incidencias" class="lista-pendientes"></div>
       <p id="vacio-inc" class="vacio" hidden>No hay incidencias que coincidan con el filtro.</p>
+    </section>
+
+    <!-- Vista: bitácora de auditoría (HU06) - SOLO LECTURA, solo Administrador -->
+    <section id="vista-bitacora" hidden>
+      <p class="sub-seccion">
+        Registro inmutable de todo lo que ocurre en el sistema. Esta vista es de
+        <strong>solo lectura</strong> (RN03): los eventos no se pueden editar ni borrar.
+      </p>
+
+      <form id="filtros-bitacora" class="filtros-bar">
+        <label>Desde<input type="date" id="f-desde" /></label>
+        <label>Hasta<input type="date" id="f-hasta" /></label>
+        <label>Usuario<input type="text" id="f-usuario" placeholder="nombre o usuario" autocomplete="off" /></label>
+        <label>Acción
+          <select id="f-accion"><option value="">Todas</option></select>
+        </label>
+        <label>Tipo de actor
+          <select id="f-actor-tipo">
+            <option value="">Todos</option>
+            <option value="Empleado">Empleado</option>
+            <option value="Admin">Admin</option>
+            <option value="Técnico">Técnico</option>
+            <option value="Sistema">Sistema</option>
+          </select>
+        </label>
+        <div class="filtros-bar-acciones">
+          <button type="submit" class="btn btn-primario">Aplicar</button>
+          <button type="button" class="btn btn-secundario" id="btn-limpiar-bitacora">Limpiar</button>
+        </div>
+      </form>
+
+      <div id="aviso-bitacora" class="aviso error" hidden></div>
+
+      <div class="tabla-scroll">
+        <table class="tabla-datos" id="tabla-bitacora">
+          <thead>
+            <tr>
+              <th>Fecha / hora</th>
+              <th>Usuario</th>
+              <th>Acción</th>
+              <th>Entidad afectada</th>
+              <th>Detalle</th>
+            </tr>
+          </thead>
+          <tbody id="cuerpo-bitacora"></tbody>
+        </table>
+      </div>
+      <p id="vacio-bitacora" class="vacio" hidden>No hay registros que coincidan con los filtros.</p>
+
+      <div class="paginacion" id="paginacion-bitacora" hidden>
+        <button type="button" class="btn btn-secundario" id="btn-bitacora-prev">Anterior</button>
+        <span id="bitacora-rango"></span>
+        <button type="button" class="btn btn-secundario" id="btn-bitacora-next">Siguiente</button>
+      </div>
     </section>
   </div>
 

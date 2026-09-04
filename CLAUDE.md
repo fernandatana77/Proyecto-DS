@@ -100,7 +100,7 @@ los 5xx se registran solo en el servidor.
 |---------|-----------------|
 | `PrestamoService` | `registrarRetiroConPin` (HU01) y `registrarDevolucion` (HU04). Dueño de RN01, RN02, RN04. Transacción: `retiro` + N × (checklist salida + `prestamo` + estado del equipo + log). |
 | `IncidenciaService` | `reportarIncidencia` (empleado, HU03) y `triarIncidencia` (staff: severidad + estado + notas). Reportar NO cambia `equipo.estado`. |
-| `AuditoriaService` | **Solo** `registrar()` y `consultar()`. Nunca update/delete. Es la única vía para escribir en `log_auditoria`. |
+| `AuditoriaService` | `registrar()`, `consultar()` (interno) y `consultarBitacora()` (HU06: filtros + paginación + nombre del actor resuelto) + `accionesRegistradas()`. **Nunca** update/delete: única vía a `log_auditoria`. |
 | `DepreciacionService` | Vida útil / valor residual del equipo (línea recta sobre `vida_util_meses`). Alimenta HU05. |
 | `NotificacionService` | Punto único de notificaciones (préstamo vencido, incidencia, etc.). En v1 registra en consola/log. |
 
@@ -154,7 +154,10 @@ Todas las CREATE TABLE y los triggers viven en `models/esquema.js`
   `notas_tic`, `atendida_por_id`, `fecha_cierre`. Reportarla **no** toca
   `equipo.estado`; RN04 la considera al devolver (`estado != 'Cerrada'` = abierta).
 - **`log_auditoria`**: append-only. Triggers `BEFORE UPDATE` / `BEFORE DELETE`
-  hacen `RAISE(ABORT, ...)`. No tiene columnas de edición ni borrado.
+  hacen `RAISE(ABORT, ...)`. No tiene columnas de edición ni borrado. Guarda
+  `actor_id` (int); la bitácora de HU06 resuelve el nombre en la consulta
+  (usuario de staff o `nombres || apellidos` del empleado, o el `actor_tipo` para
+  `Sistema`).
 
 ## Reglas de negocio (implementar tal cual)
 
@@ -164,7 +167,7 @@ Todas las CREATE TABLE y los triggers viven en `models/esquema.js`
 | **RF02 / RN02** | `PrestamoService.registrarRetiroConPin` | Un retiro no es válido sin checklist de **salida** (foto del estado) Y reenvío del PIN del empleado. El empleado solo acepta un checklist de **solo lectura**. |
 | **RN01** | `PrestamoService.asegurarEquipoPrestable` | Un equipo en `Prestado`, `En Reparación`, `En Instalación` o `De Baja` **no** puede prestarse. Solo `Disponible`. Si un equipo del carrito falla, se rechaza **todo** el retiro. → 409. |
 | **RN04** | `PrestamoService.registrarDevolucion` | La devolución tiene 2 pasos: (1) el empleado la **solicita** (`solicitarDevolucion`, marca `devolucion_solicitada`, no cierra nada); (2) TIC **certifica la recepción** con checklist editable. Si ese checklist marca `malo` **o** hay una incidencia abierta (HU03) → el equipo pasa **automáticamente** a `En Reparación`. |
-| **RF07 / RN03** | `AuditoriaService` + triggers de BD | Los logs de auditoría son solo lectura: ni editables ni borrables (garantizado en código y en la BD). |
+| **RF07 / RN03 / RNF02** | `AuditoriaService` + triggers de BD + `bitacoraController` | Los logs son solo lectura: ni editables ni borrables (en código **y** en la BD). La vista de HU06 (`panel.html`, solo Admin) solo lista/filtra — no hay ningún control de editar o borrar en la interfaz. |
 | **HU03 (principio)** | `IncidenciaService` | El empleado **solo describe** el problema en texto libre. No clasifica ni cambia el estado del equipo — eso lo decide TIC al triar (mismo principio que el checklist de préstamo/devolución). |
 
 ## Historias de usuario (alcance v1)
@@ -179,7 +182,7 @@ vuelven casos de prueba funcionales.
 | **HU03** | Reporte de incidencias durante el préstamo | Empleado: `POST /api/incidencias` + `GET /api/incidencias/mias` (botón "Reportar incidencia" en el banner de `catalogo.html`). TIC: `GET /api/incidencias` + `PATCH /api/incidencias/:id` (pestaña "Incidencias" de `panel.html`) |
 | **HU04** | Devolución de equipo y checklist de recepción | Empleado: `GET /api/prestamos/mios-activos` + `POST /api/prestamos/:id/solicitar-devolucion` (banner en `catalogo.html`). TIC: `staff.html` (login) → `panel.html` → `GET /api/prestamos/pendientes` + `POST /api/prestamos/:id/devolucion` |
 | **HU05** | Dashboard interactivo y vida útil | `GET /api/dashboard`, `DepreciacionService` |
-| **HU06** | Consulta y auditoría de bitácora de logs | `GET /api/logs` (solo staff, solo lectura) |
+| **HU06** | Consulta y auditoría de bitácora de logs | `GET /api/logs` + `GET /api/logs/acciones` (**solo Admin**, solo lectura); pestaña "Bitácora de auditoría" en `panel.html` con filtros de fecha / usuario / acción / tipo de actor y paginación |
 
 ### Cómo llegar a cada flujo (navegación)
 
@@ -190,6 +193,7 @@ vuelven casos de prueba funcionales.
 | Empleado **reporta incidencia** | `/` → PIN → `catalogo.html` → banner → "Reportar incidencia" → describe en texto libre |
 | TIC certifica la recepción | `/` → enlace **"¿Eres del área de TIC? Inicia sesión aquí"** → `staff.html` → usuario/contraseña → `panel.html` → pestaña "Devoluciones pendientes" → "Certificar recepción" |
 | TIC tría incidencias | `staff.html` → `panel.html` → pestaña **"Incidencias"** → "Atender" (severidad + estado + notas) |
+| Admin consulta la bitácora | `staff.html` (login **admin**) → `panel.html` → pestaña **"Bitácora de auditoría"** (solo aparece para rol Admin) |
 
 ### Estado: qué está completo y verificado
 
@@ -199,10 +203,10 @@ vuelven casos de prueba funcionales.
 | **HU02** Catálogo y estado de asignación | ✅ backend + PWA | tests + navegador |
 | **HU03** Reporte de incidencias + triage TIC | ✅ backend + PWA | tests + navegador |
 | **HU04** Devolución + checklist de recepción | ✅ backend + PWA | tests + navegador |
+| **HU06** Bitácora de auditoría (rol Admin) | ✅ backend + PWA | tests + navegador |
 | HU05 Dashboard / vida útil | ⛔ no empezada (`DepreciacionService` ya existe) | — |
-| HU06 Bitácora de logs | ⛔ no empezada (`AuditoriaService.consultar` ya existe) | — |
 
-**Pruebas automáticas** — `npm test`, **22/22**:
+**Pruebas automáticas** — `npm test`, **29/29**:
 
 - `tests/flujoRetiro.test.js` (13): HU01 multi-equipo; RN02; RN01 (rechazo total);
   "el empleado no fija el estado"; RN04 con/sin daño; retiro parcial; HU04
@@ -214,26 +218,28 @@ vuelven casos de prueba funcionales.
   `En Reparación` aunque el checklist esté limpio; triage de TIC (severidad +
   cierre); TIC no puede asignar `sin clasificar`; la cola pone `sin clasificar`
   primero; el empleado solo ve sus propias incidencias.
+- `tests/flujoBitacora.test.js` (7): resuelve el nombre del actor y ordena por
+  fecha desc; filtros por usuario (LIKE parcial), tipo de actor, acción y rango
+  de fechas (`hasta` con solo fecha incluye el día completo); paginación;
+  `accionesRegistradas` sin duplicados y ordenadas; RN03 (ni el service ni la BD
+  permiten modificarla).
 
-**Prueba manual en navegador** (Chrome, Node 22, `npm run seed`): los cuatro
-flujos de punta a punta — empleado retira equipos; empleado reporta incidencia
-(texto libre) y ve el badge "1 incidencia en revisión"; empleado solicita
-devolución; TIC entra por `staff.html`, tría la incidencia (Media / En proceso)
-y certifica la recepción en `panel.html`.
+**Prueba manual en navegador** (Chrome, Node 22, `npm run seed`): los flujos de
+punta a punta — empleado retira / reporta incidencia (badge "1 incidencia en
+revisión") / solicita devolución; TIC entra por `staff.html`, tría la incidencia
+y certifica la recepción; **Admin** abre la pestaña "Bitácora de auditoría",
+filtra por usuario y pagina (el Técnico no ve esa pestaña ni el endpoint → 403).
 
 ### Qué falta, en orden
 
-1. **HU06 — Bitácora** (`AuditoriaService.consultar` ya está):
-   `GET /api/logs` con filtros (acción, entidad, rango de fechas, paginación),
-   `authJWT` solo staff. Pantalla nueva o pestaña en `panel.html`. **Solo lectura.**
-2. **HU05 — Dashboard** (`DepreciacionService.calcularVidaUtil` ya está):
+1. **HU05 — Dashboard** (`DepreciacionService.calcularVidaUtil` ya está):
    `GET /api/dashboard` (equipos por estado, préstamos activos, top vida útil
    consumida, alertas de reparación). Pantalla con gráficos simples.
-3. **Edición del estado físico por TIC**: `PATCH /api/equipos/:id/componentes`
+2. **Edición del estado físico por TIC**: `PATCH /api/equipos/:id/componentes`
    (`authJWT` staff) para que Admin/Técnico ajusten `componente_equipo` fuera de
    una devolución (alta de equipo, mantenimiento). Hoy solo se actualiza al
    certificar una recepción.
-4. **Migraciones**: si el proyecto va más allá de la demo, reemplazar el
+3. **Migraciones**: si el proyecto va más allá de la demo, reemplazar el
    `DROP + CREATE` del seed por migraciones incrementales.
 
 Pulidos opcionales (según lo que pida el enunciado): la devolución se puede

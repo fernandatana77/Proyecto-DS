@@ -77,6 +77,18 @@ Los componentes validos dependen de la categoria del equipo
    queda en `malo` o hay una incidencia abierta, el equipo pasa a
    `En Reparación` (RN04) y se actualiza `componente_equipo`.
 
+## Bitácora de auditoría (HU06) — solo el Administrador
+
+`log_auditoria` registra cada evento (logins, retiros, devoluciones, incidencias,
+cambios de estado…) y es **inmutable**: triggers `BEFORE UPDATE/DELETE` en SQLite,
+y la interfaz no tiene ningún botón de editar o borrar (RN03 / RNF02).
+
+Con sesión de **admin** (`admin / Admin123*`), `panel.html` muestra la pestaña
+**"Bitácora de auditoría"** (el Técnico no la ve; su token recibe 403 en el
+endpoint). Columnas: fecha/hora, usuario (nombre resuelto + tipo de actor),
+acción, entidad afectada, detalle. Filtros por **rango de fechas** y **usuario**
+(más acción y tipo de actor), con paginación.
+
 ## Cómo llegar a cada flujo
 
 | Quiero... | Toco... |
@@ -86,6 +98,7 @@ Los componentes validos dependen de la categoria del equipo
 | Devolver un equipo (empleado) | `/` → PIN → banner "Tienes N equipos prestados" → "Solicitar devolución" |
 | Atender incidencias (TIC) | `/` → "¿Eres del área de TIC?..." → `staff.html` → `panel.html` → pestaña "Incidencias" → "Atender" |
 | Certificar una devolución (TIC) | ídem → pestaña "Devoluciones pendientes" → "Certificar recepción" |
+| Consultar la bitácora (Admin) | `/staff.html` con `admin` → `panel.html` → pestaña "Bitácora de auditoría" |
 
 ## Endpoints
 
@@ -103,11 +116,12 @@ Los componentes validos dependen de la categoria del equipo
 | POST | `/api/prestamos/:id/devolucion` | staff | HU04 |
 | POST | `/api/incidencias` · GET `/api/incidencias/mias` | PIN | HU03 |
 | GET  | `/api/incidencias` · PATCH `/api/incidencias/:id` | staff | HU03 |
+| GET  | `/api/logs` · `/api/logs/acciones` | **Admin** | HU06 |
 
 ## Tests
 
 ```bash
-npm test        # 22/22
+npm test        # 29/29
 ```
 
 - `tests/flujoRetiro.test.js` (13): HU01 multi-equipo, RN01 (rechazo total), RN02,
@@ -119,8 +133,11 @@ npm test        # 22/22
   rechazados; **RN04 con incidencia abierta** → `En Reparación`; triage de TIC y
   cierre; TIC no puede poner `sin clasificar`; la cola prioriza `sin clasificar`;
   el empleado solo ve sus propias incidencias.
+- `tests/flujoBitacora.test.js` (7): resuelve el nombre del actor + orden desc;
+  filtros por usuario / tipo de actor / acción / rango de fechas; paginación;
+  acciones sin duplicados; RN03 (inmutable en service y en BD).
 
 ## Pendiente
 
-- HU06 `/api/logs` (bitácora, solo lectura), HU05 `/api/dashboard`
+- HU05 `/api/dashboard` (indicadores + vida útil)
 - `/api/equipos/:id/componentes` — edición directa del estado físico por TIC
