@@ -109,6 +109,24 @@ function crear({ prestamoId = null, equipoId, reportadoPorTipo, reportadoPorId =
   return buscarPorId(Number(info.lastInsertRowid));
 }
 
+/**
+ * Cierra todas las incidencias abiertas de un equipo (p. ej. al finalizar su
+ * reparacion). Devuelve cuantas se cerraron.
+ */
+function cerrarAbiertasDeEquipo(equipoId, { atendidaPorId = null } = {}) {
+  const info = obtenerConexion()
+    .prepare(
+      `UPDATE incidencia
+       SET estado = 'Cerrada',
+           fecha_cierre = datetime('now'),
+           fecha_actualizacion = datetime('now'),
+           atendida_por_id = COALESCE(atendida_por_id, ?)
+       WHERE equipo_id = ? AND estado != 'Cerrada'`
+    )
+    .run(atendidaPorId, equipoId);
+  return info.changes;
+}
+
 /** Triage de TIC: severidad / estado / notas. `fechaCierre` se pasa explicito. */
 function actualizarTriage(id, { severidad, estado, notasTic, atendidaPorId, fechaCierre }) {
   obtenerConexion()
@@ -133,4 +151,5 @@ module.exports = {
   contarAbiertasPorPrestamo,
   crear,
   actualizarTriage,
+  cerrarAbiertasDeEquipo,
 };

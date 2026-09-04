@@ -61,6 +61,9 @@ volver a correr el seed. No hay sistema de migraciones incremental todavía.
 
 ## Despliegue (Render / cualquier hosting Node)
 
+Desplegado en: **https://inventario-tic-h9j3.onrender.com** (Render free — puede
+tardar ~30 s en el primer request si estaba dormido).
+
 - **Comando de arranque**: `npm start`
   (`node --experimental-sqlite --env-file-if-exists=.env servidor.js`).
 - **Build**: `npm ci` (o `npm install`). **Node 22.x** (`engines.node` + `.node-version`);
@@ -133,6 +136,7 @@ los 5xx se registran solo en el servidor.
 |---------|-----------------|
 | `PrestamoService` | `registrarRetiroConPin` (HU01) y `registrarDevolucion` (HU04). Dueño de RN01, RN02, RN04. Transacción: `retiro` + N × (checklist salida + `prestamo` + estado del equipo + log). |
 | `IncidenciaService` | `reportarIncidencia` (empleado, HU03) y `triarIncidencia` (staff: severidad + estado + notas). Reportar NO cambia `equipo.estado`. |
+| `EquipoService` | `finalizarReparacion` (staff): un equipo `En Reparación` vuelve a `Disponible` (o `De Baja`). Crea `mantenimiento` Correctivo/Finalizado, opcionalmente cierra las incidencias abiertas del equipo, exige que ningún componente quede en `malo` si el resultado es `Disponible`. |
 | `AuditoriaService` | `registrar()`, `consultar()` (interno) y `consultarBitacora()` (HU06: filtros + paginación + nombre del actor resuelto) + `accionesRegistradas()`. **Nunca** update/delete: única vía a `log_auditoria`. |
 | `DepreciacionService` | Vida útil / valor residual **de un equipo** (línea recta sobre `vida_util_meses` desde `fecha_adquisicion`, RN05). Se usa en el detalle del catálogo. |
 | `DashboardService` | HU05 / RF04: agrega el parque de equipos (totales por estado + vida útil % promedio) a partir de 2 queries agregadas; filtro por categoría. La vida útil % se calcula **en SQL** (`equipoModel`), acotada a [0, 100]. |
@@ -233,6 +237,7 @@ vuelven casos de prueba funcionales.
 | Empleado **reporta incidencia** | `/` → PIN → `catalogo.html` → banner → "Reportar incidencia" → describe en texto libre |
 | TIC certifica la recepción | `/` → enlace **"¿Eres del área de TIC? Inicia sesión aquí"** → `staff.html` → usuario/contraseña → `panel.html` → pestaña "Devoluciones pendientes" → "Certificar recepción" |
 | TIC tría incidencias | `staff.html` → `panel.html` → pestaña **"Incidencias"** → "Atender" (severidad + estado + notas) |
+| TIC cierra una reparación | `staff.html` → `panel.html` → pestaña **"En reparación"** → "Marcar como reparado" (checklist de componentes + resultado Disponible/De Baja) |
 | Admin ve el dashboard | `staff.html` (login **admin**) → `panel.html` → pestaña **"Dashboard"** (solo rol Admin) |
 | Admin consulta la bitácora | `staff.html` (login **admin**) → `panel.html` → pestaña **"Bitácora de auditoría"** (solo aparece para rol Admin) |
 
@@ -247,9 +252,11 @@ vuelven casos de prueba funcionales.
 | **HU05** Dashboard interactivo + vida útil (rol Admin) | ✅ backend + PWA | tests + navegador |
 | **HU06** Bitácora de auditoría (rol Admin) | ✅ backend + PWA | tests + navegador |
 
-**Las 6 HU del alcance v1 están completas.**
+**Las 6 HU del alcance v1 están completas.** Además: **cierre de reparación**
+(un equipo `En Reparación` vuelve al catálogo como `Disponible` o se da de `De Baja`;
+`POST /api/equipos/:id/reparacion/finalizar`, staff).
 
-**Pruebas automáticas** — `npm test`, **36/36**:
+**Pruebas automáticas** — `npm test`, **43/43**:
 
 - `tests/flujoRetiro.test.js` (13): HU01 multi-equipo; RN02; RN01 (rechazo total);
   "el empleado no fija el estado"; RN04 con/sin daño; retiro parcial; HU04
@@ -271,6 +278,11 @@ vuelven casos de prueba funcionales.
   fecha excluido del promedio); filtro por categoría recalcula los totales;
   "cerca del fin de vida útil" (≥ 85%, ordenado, limitado); categoría inválida
   se ignora; **RNF01** (< 500 ms con 400+ equipos).
+- `tests/flujoReparacion.test.js` (7): `En Reparación` → `Disponible` crea
+  `mantenimiento` Finalizado y actualiza componentes; no se finaliza un equipo
+  que no está en reparación; `Disponible` con componente en `malo` → rechazado;
+  `De Baja` sí se permite; observaciones/resultado inválidos; cierre (o no) de
+  las incidencias abiertas del equipo.
 
 **Prueba manual en navegador** (Chrome, Node 22, `npm run seed`): los flujos de
 punta a punta — empleado retira / reporta incidencia (badge "1 incidencia en
@@ -281,10 +293,13 @@ pagina). El Técnico no ve ninguna de las dos pestañas ni sus endpoints (→ 40
 
 ### Qué falta
 
-1. **Edición del estado físico por TIC** (fuera del alcance de las 6 HU, para
-   después de la entrega): `PATCH /api/equipos/:id/componentes` (`authJWT` staff)
-   para ajustar `componente_equipo` fuera de una devolución.
-2. **Migraciones**: si el proyecto va más allá de la demo, reemplazar el
+1. **Persistencia real en el deploy**: Render free tiene disco efímero (se borra al
+   dormir el servicio o en cada redeploy) → la BD SQLite se re-siembra sola. Para
+   persistir: plan con disco de pago, o migrar a Postgres/Turso (cambio grande:
+   todos los models a async). Decidido: **se deja así** para la entrega.
+2. **Edición del estado físico por TIC fuera de una devolución/reparación**:
+   `PATCH /api/equipos/:id/componentes` (`authJWT` staff).
+3. **Migraciones**: si el proyecto va más allá de la demo, reemplazar el
    `DROP + CREATE` del seed por migraciones incrementales.
 
 Pulidos opcionales (según lo que pida el enunciado): la devolución se puede

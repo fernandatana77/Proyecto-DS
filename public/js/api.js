@@ -114,6 +114,9 @@ const API = (() => {
     devolucionesPendientes: () => pedir('/prestamos/pendientes'),
     certificarDevolucion: (prestamoId, checklist) =>
       pedir(`/prestamos/${prestamoId}/devolucion`, { metodo: 'POST', cuerpo: { checklist } }),
+    equiposEnReparacion: () => pedir(`/catalogo?estado=${encodeURIComponent('En Reparación')}`),
+    finalizarReparacion: (equipoId, payload) =>
+      pedir(`/equipos/${equipoId}/reparacion/finalizar`, { metodo: 'POST', cuerpo: payload }),
     incidencias: (params = '') => pedir(`/incidencias${params}`),
     triarIncidencia: (id, cambios) =>
       pedir(`/incidencias/${id}`, { metodo: 'PATCH', cuerpo: cambios }),

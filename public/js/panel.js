@@ -67,9 +67,11 @@
     const vista = tab.dataset.vista;
     $('vista-devoluciones').hidden = vista !== 'devoluciones';
     $('vista-incidencias').hidden = vista !== 'incidencias';
+    $('vista-reparacion').hidden = vista !== 'reparacion';
     $('vista-dashboard').hidden = vista !== 'dashboard';
     $('vista-bitacora').hidden = vista !== 'bitacora';
     if (vista === 'incidencias') cargarIncidencias();
+    if (vista === 'reparacion') cargarReparacion();
     if (vista === 'dashboard') cargarDashboard();
     if (vista === 'bitacora') cargarBitacora();
   });
@@ -127,7 +129,8 @@
     }
   }
 
-  function filaComponenteEditable(comp) {
+  /** Fila editable de un componente; escribe en el mapa `destino`. */
+  function filaComponenteEditable(comp, destino) {
     const fila = el('div', 'check-editable');
     const etiqueta = el('div', 'check-editable-nombre');
     etiqueta.textContent = comp.nombre.replace(/_/g, ' ');
@@ -137,9 +140,9 @@
     COMPONENTE_ESTADOS.forEach(({ valor, etiqueta: txt }) => {
       const b = el('button', 'opcion', txt);
       b.type = 'button';
-      if (estadoComponentes[comp.nombre] === valor) b.classList.add(`sel-${valor}`);
+      if (destino[comp.nombre] === valor) b.classList.add(`sel-${valor}`);
       b.addEventListener('click', () => {
-        estadoComponentes[comp.nombre] = valor;
+        destino[comp.nombre] = valor;
         opciones.querySelectorAll('button').forEach((x) => x.classList.remove('sel-bueno', 'sel-regular', 'sel-malo'));
         b.classList.add(`sel-${valor}`);
       });
@@ -171,7 +174,7 @@
         estadoComponentes[c.nombre] = c.estado;
       });
       certChecklist.innerHTML = '';
-      detalle.componentes.forEach((c) => certChecklist.appendChild(filaComponenteEditable(c)));
+      detalle.componentes.forEach((c) => certChecklist.appendChild(filaComponenteEditable(c, estadoComponentes)));
 
       const abiertas = incs.incidencias.filter((i) => i.estado !== 'Cerrada');
       if (abiertas.length) {
@@ -353,6 +356,125 @@
     } finally {
       enviando = false;
       $('btn-guardar-tri').disabled = false;
+    }
+  });
+
+  // ===================== Equipos en reparación =====================
+  const listaRep = $('lista-reparacion');
+  const modalRep = $('modal-reparacion');
+  const repAviso = $('rep-aviso');
+  let repSeleccion = null;
+  let repComponentes = {};
+  let repResultado = null;
+
+  function tarjetaReparacion(eq) {
+    const card = el('div', 'tarjeta-pendiente');
+    const icono = el('div', 'tarjeta-icono');
+    icono.innerHTML = iconoDeCategoria(eq.categoria);
+
+    const info = el('div', 'pendiente-info');
+    info.appendChild(el('div', 'tarjeta-codigo', `${eq.codigoInterno} · ${eq.categoria}`));
+    info.appendChild(el('div', 'tarjeta-nombre', eq.nombre));
+    const malos = (eq.componentes || []).filter((c) => c.estado === 'malo').map((c) => c.nombre.replace(/_/g, ' '));
+    info.appendChild(el('div', 'tarjeta-categoria', malos.length ? `Componentes con daño: ${malos.join(', ')}` : 'Sin componentes en "malo" registrados'));
+
+    const boton = el('button', 'btn btn-primario', 'Marcar como reparado');
+    boton.addEventListener('click', () => abrirModalReparacion(eq));
+
+    const izq = el('div', 'pendiente-izq');
+    izq.append(icono, info);
+    card.append(izq, boton);
+    return card;
+  }
+
+  async function cargarReparacion() {
+    listaRep.innerHTML = '<p class="vacio">Cargando...</p>';
+    try {
+      const { equipos } = await API.equiposEnReparacion();
+      listaRep.innerHTML = '';
+      $('contador-reparacion').textContent = equipos.length ? `(${equipos.length})` : '';
+      $('vacio-rep').hidden = equipos.length > 0;
+      equipos.forEach((eq) => listaRep.appendChild(tarjetaReparacion(eq)));
+    } catch (error) {
+      listaRep.innerHTML = '';
+      mostrarError(error.mensaje || 'No se pudo cargar la lista de equipos en reparación.');
+    }
+  }
+
+  function marcarResultado(valor) {
+    repResultado = valor;
+    $('rep-resultado').querySelectorAll('.opcion').forEach((b) => b.classList.toggle('sel-activa', b.dataset.res === valor));
+  }
+  $('rep-resultado').addEventListener('click', (e) => {
+    const b = e.target.closest('.opcion');
+    if (b) marcarResultado(b.dataset.res);
+  });
+
+  async function abrirModalReparacion(eq) {
+    repSeleccion = eq;
+    repAviso.hidden = true;
+    $('rep-obs').value = '';
+    $('rep-cerrar-inc').checked = true;
+    $('rep-paso-form').hidden = false;
+    $('rep-paso-ok').hidden = true;
+    $('rep-titulo').textContent = `Finalizar reparación: ${eq.nombre}`;
+    $('rep-subtitulo').textContent = `${eq.codigoInterno} · ${eq.categoria}`;
+    marcarResultado(null);
+
+    repComponentes = {};
+    (eq.componentes || []).forEach((c) => {
+      repComponentes[c.nombre] = c.estado;
+    });
+    const cont = $('rep-checklist');
+    cont.innerHTML = '';
+    (eq.componentes || []).forEach((c) => cont.appendChild(filaComponenteEditable(c, repComponentes)));
+
+    modalRep.hidden = false;
+  }
+
+  $('btn-cancelar-rep').addEventListener('click', () => (modalRep.hidden = true));
+  modalRep.addEventListener('click', (e) => {
+    if (e.target === modalRep) modalRep.hidden = true;
+  });
+  $('btn-cerrar-rep-ok').addEventListener('click', () => {
+    modalRep.hidden = true;
+    cargarReparacion();
+  });
+
+  $('btn-guardar-rep').addEventListener('click', async () => {
+    if (enviando || !repSeleccion) return;
+    if (!repResultado) {
+      repAviso.textContent = 'Elige un resultado: reparado o dar de baja.';
+      repAviso.hidden = false;
+      return;
+    }
+    const obs = $('rep-obs').value.trim();
+    if (obs.length < 5) {
+      repAviso.textContent = 'Describe brevemente qué se hizo en la reparación.';
+      repAviso.hidden = false;
+      return;
+    }
+
+    enviando = true;
+    $('btn-guardar-rep').disabled = true;
+    repAviso.hidden = true;
+    try {
+      const r = await API.finalizarReparacion(repSeleccion.id, {
+        resultado: repResultado,
+        observaciones: obs,
+        componentes: repComponentes,
+        cerrarIncidencias: $('rep-cerrar-inc').checked,
+      });
+      $('rep-texto-ok').textContent =
+        `${r.mensaje}${r.incidenciasCerradas ? ` (${r.incidenciasCerradas} incidencia(s) cerrada(s))` : ''}`;
+      $('rep-paso-form').hidden = true;
+      $('rep-paso-ok').hidden = false;
+    } catch (error) {
+      repAviso.textContent = error.mensaje || 'No se pudo registrar la reparación.';
+      repAviso.hidden = false;
+    } finally {
+      enviando = false;
+      $('btn-guardar-rep').disabled = false;
     }
   });
 
@@ -594,4 +716,5 @@
   // ===================== arranque =====================
   cargarDevoluciones();
   cargarIncidencias(); // para el contador de la pestaña
+  cargarReparacion(); // para el contador de la pestaña
 })();

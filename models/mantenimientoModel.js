@@ -2,7 +2,7 @@
 
 const { obtenerConexion } = require('../config/database');
 
-/** Acceso a datos de `mantenimiento`. (Se completa junto con HU04 / HU05.) */
+/** Acceso a datos de `mantenimiento`. Solo SQL, sin logica de negocio. */
 
 function buscarPorId(id) {
   return obtenerConexion().prepare('SELECT * FROM mantenimiento WHERE id = ?').get(id);
@@ -24,4 +24,15 @@ function crear({ equipoId, tipo, descripcion, costo = 0, realizadoPor = null }) 
   return buscarPorId(Number(info.lastInsertRowid));
 }
 
-module.exports = { buscarPorId, listarPorEquipo, crear };
+/** Registra un mantenimiento ya cerrado (p. ej. TIC finaliza una reparacion). */
+function crearFinalizado({ equipoId, tipo = 'Correctivo', descripcion, costo = 0, realizadoPor = null }) {
+  const info = obtenerConexion()
+    .prepare(
+      `INSERT INTO mantenimiento (equipo_id, tipo, descripcion, costo, realizado_por, fecha_fin, estado)
+       VALUES (?, ?, ?, ?, ?, datetime('now'), 'Finalizado')`
+    )
+    .run(equipoId, tipo, descripcion, costo, realizadoPor);
+  return buscarPorId(Number(info.lastInsertRowid));
+}
+
+module.exports = { buscarPorId, listarPorEquipo, crear, crearFinalizado };

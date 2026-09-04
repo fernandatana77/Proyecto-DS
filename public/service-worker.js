@@ -1,5 +1,5 @@
 /* Offline-first: precache del app shell; API siempre a la red. */
-const CACHE = 'inv-tic-v8';
+const CACHE = 'inv-tic-v9';
 const SHELL = [
   '/',
   '/index.html',

@@ -26,6 +26,7 @@
     <nav class="tabs" id="tabs-panel">
       <button class="tab activo" data-vista="devoluciones">Devoluciones pendientes <span id="contador-pendientes" class="contador"></span></button>
       <button class="tab" data-vista="incidencias">Incidencias <span id="contador-incidencias" class="contador"></span></button>
+      <button class="tab" data-vista="reparacion">En reparación <span id="contador-reparacion" class="contador"></span></button>
       <button class="tab" id="tab-dashboard" data-vista="dashboard" hidden>Dashboard</button>
       <button class="tab" id="tab-bitacora" data-vista="bitacora" hidden>Bitácora de auditoría</button>
     </nav>
@@ -48,6 +49,13 @@
       </div>
       <div id="lista-incidencias" class="lista-pendientes"></div>
       <p id="vacio-inc" class="vacio" hidden>No hay incidencias que coincidan con el filtro.</p>
+    </section>
+
+    <!-- Vista: equipos en reparación - TIC los devuelve al catálogo -->
+    <section id="vista-reparacion" hidden>
+      <p class="sub-seccion">Equipos fuera de servicio. Cuando la reparación termina, TIC los marca como reparados y vuelven al catálogo (o se dan de baja).</p>
+      <div id="lista-reparacion" class="lista-pendientes"></div>
+      <p id="vacio-rep" class="vacio" hidden>No hay equipos en reparación.</p>
     </section>
 
     <!-- Vista: dashboard (HU05) - solo Administrador -->
@@ -164,6 +172,47 @@
         <div class="aviso ok" id="cert-texto-ok"></div>
         <div class="acciones-modal">
           <button class="btn btn-primario" id="btn-cerrar-cert-ok">Entendido</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Modal: finalizar reparación -->
+  <div id="modal-reparacion" class="modal-fondo" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="rep-titulo">
+      <section id="rep-paso-form">
+        <h2 id="rep-titulo">Finalizar reparación</h2>
+        <p class="subtitulo" id="rep-subtitulo"></p>
+        <div id="rep-aviso" class="aviso error" hidden></div>
+
+        <p class="sub-seccion">Estado físico del equipo tras la reparación:</p>
+        <div id="rep-checklist"></div>
+
+        <p class="etiqueta-bloque">Resultado</p>
+        <div class="opciones-estado" id="rep-resultado">
+          <button type="button" class="opcion" data-res="Disponible">Reparado — vuelve al catálogo</button>
+          <button type="button" class="opcion" data-res="De Baja">Sin arreglo — dar de baja</button>
+        </div>
+
+        <label for="rep-obs">¿Qué se hizo en la reparación?</label>
+        <textarea id="rep-obs" rows="3" placeholder="Cambio de pantalla, limpieza interna, reemplazo de cable..."></textarea>
+
+        <label class="confirmacion-check" for="rep-cerrar-inc">
+          <input type="checkbox" id="rep-cerrar-inc" checked />
+          <span>Cerrar las incidencias abiertas de este equipo (quedaron resueltas con la reparación).</span>
+        </label>
+
+        <div class="acciones-modal">
+          <button class="btn btn-secundario" id="btn-cancelar-rep">Cancelar</button>
+          <button class="btn btn-primario" id="btn-guardar-rep">Registrar</button>
+        </div>
+      </section>
+
+      <section id="rep-paso-ok" hidden>
+        <h2>Reparación registrada</h2>
+        <div class="aviso ok" id="rep-texto-ok"></div>
+        <div class="acciones-modal">
+          <button class="btn btn-primario" id="btn-cerrar-rep-ok">Entendido</button>
         </div>
       </section>
     </div>
