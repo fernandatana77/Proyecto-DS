@@ -75,7 +75,7 @@ public/       PWA. Páginas: index.html (login PIN empleado, oscuro), staff.html
               (login usuario/contraseña TIC, oscuro), catalogo.html (empleado,
               claro), panel.html (TIC: cola de devoluciones, claro). iconos.js = SVG por categoría
 scripts/      seed.js (DROP + CREATE + datos demo)
-tests/        node:test — flujoRetiro.test.js (HU01/02/04), flujoIncidencia.test.js (HU03)
+tests/        node:test — flujoRetiro (HU01/02/04), flujoIncidencia (HU03), flujoBitacora (HU06), flujoDashboard (HU05)
 app.js        arma el Express app (parsers, /api, estáticos, 404, errorHandler)
 servidor.js   inicializa la BD y hace listen()
 ```
@@ -101,7 +101,8 @@ los 5xx se registran solo en el servidor.
 | `PrestamoService` | `registrarRetiroConPin` (HU01) y `registrarDevolucion` (HU04). Dueño de RN01, RN02, RN04. Transacción: `retiro` + N × (checklist salida + `prestamo` + estado del equipo + log). |
 | `IncidenciaService` | `reportarIncidencia` (empleado, HU03) y `triarIncidencia` (staff: severidad + estado + notas). Reportar NO cambia `equipo.estado`. |
 | `AuditoriaService` | `registrar()`, `consultar()` (interno) y `consultarBitacora()` (HU06: filtros + paginación + nombre del actor resuelto) + `accionesRegistradas()`. **Nunca** update/delete: única vía a `log_auditoria`. |
-| `DepreciacionService` | Vida útil / valor residual del equipo (línea recta sobre `vida_util_meses`). Alimenta HU05. |
+| `DepreciacionService` | Vida útil / valor residual **de un equipo** (línea recta sobre `vida_util_meses` desde `fecha_adquisicion`, RN05). Se usa en el detalle del catálogo. |
+| `DashboardService` | HU05 / RF04: agrega el parque de equipos (totales por estado + vida útil % promedio) a partir de 2 queries agregadas; filtro por categoría. La vida útil % se calcula **en SQL** (`equipoModel`), acotada a [0, 100]. |
 | `NotificacionService` | Punto único de notificaciones (préstamo vencido, incidencia, etc.). En v1 registra en consola/log. |
 
 ### Autenticación (RF01 / RNF05)
@@ -129,7 +130,12 @@ Todas las CREATE TABLE y los triggers viven en `models/esquema.js`
 
 - **`equipo`**: `categoria` (Laptop, Monitor, Mouse, Teclado, Cargador,
   Proyector), `nombre` (título de la tarjeta), `estado` = `Disponible` |
-  `Prestado` | `En Reparación` | `En Instalación` | `De Baja`.
+  `Prestado` | `En Reparación` | `En Instalación` | `De Baja`,
+  `fecha_adquisicion`, `valor_adquisicion`, `vida_util_meses` (default 48).
+  **RN05**: `vida_util_pct` NO se almacena — se calcula al vuelo (depreciación
+  lineal desde `fecha_adquisicion`, acotada a [0, 100]). La fórmula vive en dos
+  sitios que deben coincidir: `DepreciacionService.calcularVidaUtil` (JS, por
+  equipo) y `SQL_VIDA_UTIL_PCT` en `equipoModel` (SQL, para el dashboard).
 - **`componente_equipo`**: `(equipo_id, nombre)` único. `estado` =
   `bueno` | `regular` | `malo` + `observacion`. Los componentes válidos por
   categoría están en `COMPONENTES_POR_CATEGORIA` (`config/constantes.js`); al dar
@@ -169,6 +175,7 @@ Todas las CREATE TABLE y los triggers viven en `models/esquema.js`
 | **RN04** | `PrestamoService.registrarDevolucion` | La devolución tiene 2 pasos: (1) el empleado la **solicita** (`solicitarDevolucion`, marca `devolucion_solicitada`, no cierra nada); (2) TIC **certifica la recepción** con checklist editable. Si ese checklist marca `malo` **o** hay una incidencia abierta (HU03) → el equipo pasa **automáticamente** a `En Reparación`. |
 | **RF07 / RN03 / RNF02** | `AuditoriaService` + triggers de BD + `bitacoraController` | Los logs son solo lectura: ni editables ni borrables (en código **y** en la BD). La vista de HU06 (`panel.html`, solo Admin) solo lista/filtra — no hay ningún control de editar o borrar en la interfaz. |
 | **HU03 (principio)** | `IncidenciaService` | El empleado **solo describe** el problema en texto libre. No clasifica ni cambia el estado del equipo — eso lo decide TIC al triar (mismo principio que el checklist de préstamo/devolución). |
+| **RN05 / RF04** | `equipoModel` (SQL) + `DepreciacionService` + `DashboardService` | La vida útil % se calcula automáticamente según `fecha_adquisicion` (depreciación lineal, acotada 0–100); nunca es un valor fijo. Dashboard de HU05 en `panel.html`, solo Admin, responde muy por debajo de los 2 s de RNF01 (agregados SQL). |
 
 ## Historias de usuario (alcance v1)
 
@@ -181,7 +188,7 @@ vuelven casos de prueba funcionales.
 | **HU02** | Consulta de catálogo y estado de asignación actual | `GET /api/catalogo`, `GET /api/catalogo/:id`, `GET /api/retiros/mios`; `catalogo.html` en tarjetas por categoría |
 | **HU03** | Reporte de incidencias durante el préstamo | Empleado: `POST /api/incidencias` + `GET /api/incidencias/mias` (botón "Reportar incidencia" en el banner de `catalogo.html`). TIC: `GET /api/incidencias` + `PATCH /api/incidencias/:id` (pestaña "Incidencias" de `panel.html`) |
 | **HU04** | Devolución de equipo y checklist de recepción | Empleado: `GET /api/prestamos/mios-activos` + `POST /api/prestamos/:id/solicitar-devolucion` (banner en `catalogo.html`). TIC: `staff.html` (login) → `panel.html` → `GET /api/prestamos/pendientes` + `POST /api/prestamos/:id/devolucion` |
-| **HU05** | Dashboard interactivo y vida útil | `GET /api/dashboard`, `DepreciacionService` |
+| **HU05** | Dashboard interactivo y vida útil | `GET /api/dashboard?categoria=` (**solo Admin**); pestaña "Dashboard" en `panel.html` con KPIs (total / prestados / en reparación / disponibles / vida útil % promedio), desglose por categoría y lista "cerca del fin de vida útil"; filtro por categoría |
 | **HU06** | Consulta y auditoría de bitácora de logs | `GET /api/logs` + `GET /api/logs/acciones` (**solo Admin**, solo lectura); pestaña "Bitácora de auditoría" en `panel.html` con filtros de fecha / usuario / acción / tipo de actor y paginación |
 
 ### Cómo llegar a cada flujo (navegación)
@@ -193,6 +200,7 @@ vuelven casos de prueba funcionales.
 | Empleado **reporta incidencia** | `/` → PIN → `catalogo.html` → banner → "Reportar incidencia" → describe en texto libre |
 | TIC certifica la recepción | `/` → enlace **"¿Eres del área de TIC? Inicia sesión aquí"** → `staff.html` → usuario/contraseña → `panel.html` → pestaña "Devoluciones pendientes" → "Certificar recepción" |
 | TIC tría incidencias | `staff.html` → `panel.html` → pestaña **"Incidencias"** → "Atender" (severidad + estado + notas) |
+| Admin ve el dashboard | `staff.html` (login **admin**) → `panel.html` → pestaña **"Dashboard"** (solo rol Admin) |
 | Admin consulta la bitácora | `staff.html` (login **admin**) → `panel.html` → pestaña **"Bitácora de auditoría"** (solo aparece para rol Admin) |
 
 ### Estado: qué está completo y verificado
@@ -203,10 +211,12 @@ vuelven casos de prueba funcionales.
 | **HU02** Catálogo y estado de asignación | ✅ backend + PWA | tests + navegador |
 | **HU03** Reporte de incidencias + triage TIC | ✅ backend + PWA | tests + navegador |
 | **HU04** Devolución + checklist de recepción | ✅ backend + PWA | tests + navegador |
+| **HU05** Dashboard interactivo + vida útil (rol Admin) | ✅ backend + PWA | tests + navegador |
 | **HU06** Bitácora de auditoría (rol Admin) | ✅ backend + PWA | tests + navegador |
-| HU05 Dashboard / vida útil | ⛔ no empezada (`DepreciacionService` ya existe) | — |
 
-**Pruebas automáticas** — `npm test`, **29/29**:
+**Las 6 HU del alcance v1 están completas.**
+
+**Pruebas automáticas** — `npm test`, **36/36**:
 
 - `tests/flujoRetiro.test.js` (13): HU01 multi-equipo; RN02; RN01 (rechazo total);
   "el empleado no fija el estado"; RN04 con/sin daño; retiro parcial; HU04
@@ -223,23 +233,25 @@ vuelven casos de prueba funcionales.
   de fechas (`hasta` con solo fecha incluye el día completo); paginación;
   `accionesRegistradas` sin duplicados y ordenadas; RN03 (ni el service ni la BD
   permiten modificarla).
+- `tests/flujoDashboard.test.js` (8): totales por estado; **RN05** (vida útil %
+  por fecha de adquisición, acotada a [0, 100], fecha futura → 0%, equipo sin
+  fecha excluido del promedio); filtro por categoría recalcula los totales;
+  "cerca del fin de vida útil" (≥ 85%, ordenado, limitado); categoría inválida
+  se ignora; **RNF01** (< 500 ms con 400+ equipos).
 
 **Prueba manual en navegador** (Chrome, Node 22, `npm run seed`): los flujos de
 punta a punta — empleado retira / reporta incidencia (badge "1 incidencia en
 revisión") / solicita devolución; TIC entra por `staff.html`, tría la incidencia
-y certifica la recepción; **Admin** abre la pestaña "Bitácora de auditoría",
-filtra por usuario y pagina (el Técnico no ve esa pestaña ni el endpoint → 403).
+y certifica la recepción; **Admin** abre "Dashboard" (KPIs + desglose + filtro
+por categoría, respuesta ~16 ms) y "Bitácora de auditoría" (filtra por usuario y
+pagina). El Técnico no ve ninguna de las dos pestañas ni sus endpoints (→ 403).
 
-### Qué falta, en orden
+### Qué falta
 
-1. **HU05 — Dashboard** (`DepreciacionService.calcularVidaUtil` ya está):
-   `GET /api/dashboard` (equipos por estado, préstamos activos, top vida útil
-   consumida, alertas de reparación). Pantalla con gráficos simples.
-2. **Edición del estado físico por TIC**: `PATCH /api/equipos/:id/componentes`
-   (`authJWT` staff) para que Admin/Técnico ajusten `componente_equipo` fuera de
-   una devolución (alta de equipo, mantenimiento). Hoy solo se actualiza al
-   certificar una recepción.
-3. **Migraciones**: si el proyecto va más allá de la demo, reemplazar el
+1. **Edición del estado físico por TIC** (fuera del alcance de las 6 HU, para
+   después de la entrega): `PATCH /api/equipos/:id/componentes` (`authJWT` staff)
+   para ajustar `componente_equipo` fuera de una devolución.
+2. **Migraciones**: si el proyecto va más allá de la demo, reemplazar el
    `DROP + CREATE` del seed por migraciones incrementales.
 
 Pulidos opcionales (según lo que pida el enunciado): la devolución se puede
@@ -262,6 +274,11 @@ triage genérico.
   `{severidad?, estado?, notasTic?}` cubre clasificar, avanzar y cerrar. TIC no
   puede volver a `sin clasificar` (`SEVERIDADES_TRIAGE`). Al pasar a `Cerrada`
   se fija `fecha_cierre`; al reabrir se limpia.
+- **Dashboard (HU05): agregados en SQL, no bucles en JS (RNF01).** Todo sale de
+  2 queries `GROUP BY categoria` sobre `equipo`. La vida útil % se calcula dentro
+  de la query (`julianday`), no iterando equipos. El promedio "todas las
+  categorías" es un promedio ponderado por nº de equipos con fecha de adquisición.
+  El `DashboardService` es solo para el Admin, igual que la bitácora.
 - **Componentes por categoría, no una lista global.** Un mouse no tiene
   "pantalla". `COMPONENTES_POR_CATEGORIA` define el set por categoría de equipo;
   se instancian en `componente_equipo` al crear el equipo (hoy solo el seed).

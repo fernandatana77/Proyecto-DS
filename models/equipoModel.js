@@ -82,4 +82,70 @@ function actualizarEstado(id, nuevoEstado) {
   return buscarPorId(id);
 }
 
-module.exports = { buscarPorId, buscarPorCodigo, listarCatalogo, crear, actualizarEstado };
+/**
+ * RN05 - Vida util % calculada AUTOMATICAMENTE segun la fecha de adquisicion:
+ * depreciacion lineal, tiempo transcurrido / vida util total, acotada a [0, 100].
+ * Misma formula que `DepreciacionService.calcularVidaUtil` (mes = 30.4375 dias).
+ * Se calcula en la consulta -> nada que recalcular ni almacenar (RNF01).
+ */
+const SQL_VIDA_UTIL_PCT = `
+  MIN(100.0, MAX(0.0,
+    (julianday('now') - julianday(fecha_adquisicion)) / (vida_util_meses * 30.4375) * 100.0
+  ))`;
+
+const SQL_TIENE_VIDA_UTIL = "fecha_adquisicion IS NOT NULL AND vida_util_meses IS NOT NULL AND vida_util_meses > 0";
+
+/** HU05 - Metricas del parque de equipos agrupadas por categoria (una sola query). */
+function metricasPorCategoria() {
+  return obtenerConexion()
+    .prepare(
+      `SELECT
+         categoria,
+         COUNT(*)                                   AS total,
+         SUM(estado = 'Disponible')                 AS disponibles,
+         SUM(estado = 'Prestado')                   AS prestados,
+         SUM(estado = 'En Reparación')              AS en_reparacion,
+         SUM(estado = 'En Instalación')             AS en_instalacion,
+         SUM(estado = 'De Baja')                    AS de_baja,
+         SUM(CASE WHEN ${SQL_TIENE_VIDA_UTIL} THEN 1 ELSE 0 END) AS con_vida_util,
+         AVG(CASE WHEN ${SQL_TIENE_VIDA_UTIL} THEN ${SQL_VIDA_UTIL_PCT} ELSE NULL END) AS vida_util_pct
+       FROM equipo
+       GROUP BY categoria
+       ORDER BY categoria`
+    )
+    .all();
+}
+
+/** HU05 - Equipos que superan `umbral`% de vida util consumida (los mas gastados primero). */
+function equiposCercaFinVidaUtil({ categoria, umbral = 85, limite = 5 } = {}) {
+  const params = [];
+  let filtroCategoria = '';
+  if (categoria) {
+    filtroCategoria = 'AND categoria = ?';
+    params.push(categoria);
+  }
+  return obtenerConexion()
+    .prepare(
+      `SELECT id, codigo_interno, nombre, categoria, estado, fecha_adquisicion, vida_util_meses, vida_util_pct
+       FROM (
+         SELECT id, codigo_interno, nombre, categoria, estado, fecha_adquisicion, vida_util_meses,
+                ${SQL_VIDA_UTIL_PCT} AS vida_util_pct
+         FROM equipo
+         WHERE ${SQL_TIENE_VIDA_UTIL} ${filtroCategoria}
+       )
+       WHERE vida_util_pct >= ?
+       ORDER BY vida_util_pct DESC
+       LIMIT ?`
+    )
+    .all(...params, umbral, limite);
+}
+
+module.exports = {
+  buscarPorId,
+  buscarPorCodigo,
+  listarCatalogo,
+  crear,
+  actualizarEstado,
+  metricasPorCategoria,
+  equiposCercaFinVidaUtil,
+};

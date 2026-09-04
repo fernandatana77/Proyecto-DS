@@ -121,5 +121,8 @@ const API = (() => {
     // --- Bitácora (HU06, solo Admin, solo lectura) ---
     bitacora: (params = '') => pedir(`/logs${params}`),
     accionesBitacora: () => pedir('/logs/acciones'),
+
+    // --- Dashboard (HU05, solo Admin) ---
+    dashboard: (params = '') => pedir(`/dashboard${params}`),
   };
 })();

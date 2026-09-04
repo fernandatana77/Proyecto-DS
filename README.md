@@ -77,6 +77,18 @@ Los componentes validos dependen de la categoria del equipo
    queda en `malo` o hay una incidencia abierta, el equipo pasa a
    `En Reparación` (RN04) y se actualiza `componente_equipo`.
 
+## Dashboard (HU05 / RF04) — solo el Administrador
+
+Con sesión de **admin**, `panel.html` muestra la pestaña **"Dashboard"** (el
+Técnico no la ve; el endpoint le devuelve 403). Indicadores de un vistazo:
+total de equipos, prestados, en reparación, disponibles y **vida útil %
+promedio**, con **filtro por categoría** (mismas categorías del catálogo), más un
+desglose por categoría y una lista de equipos **cerca del fin de vida útil**.
+
+La **vida útil %** se calcula automáticamente por la fecha de adquisición
+(depreciación lineal, acotada a 0–100 %, **RN05**) — nunca es un valor fijo. Todo
+sale de consultas agregadas en SQL, así que responde en milisegundos (**RNF01**).
+
 ## Bitácora de auditoría (HU06) — solo el Administrador
 
 `log_auditoria` registra cada evento (logins, retiros, devoluciones, incidencias,
@@ -98,6 +110,7 @@ acción, entidad afectada, detalle. Filtros por **rango de fechas** y **usuario*
 | Devolver un equipo (empleado) | `/` → PIN → banner "Tienes N equipos prestados" → "Solicitar devolución" |
 | Atender incidencias (TIC) | `/` → "¿Eres del área de TIC?..." → `staff.html` → `panel.html` → pestaña "Incidencias" → "Atender" |
 | Certificar una devolución (TIC) | ídem → pestaña "Devoluciones pendientes" → "Certificar recepción" |
+| Ver el dashboard (Admin) | `/staff.html` con `admin` → `panel.html` → pestaña "Dashboard" |
 | Consultar la bitácora (Admin) | `/staff.html` con `admin` → `panel.html` → pestaña "Bitácora de auditoría" |
 
 ## Endpoints
@@ -117,11 +130,12 @@ acción, entidad afectada, detalle. Filtros por **rango de fechas** y **usuario*
 | POST | `/api/incidencias` · GET `/api/incidencias/mias` | PIN | HU03 |
 | GET  | `/api/incidencias` · PATCH `/api/incidencias/:id` | staff | HU03 |
 | GET  | `/api/logs` · `/api/logs/acciones` | **Admin** | HU06 |
+| GET  | `/api/dashboard?categoria=` | **Admin** | HU05 |
 
 ## Tests
 
 ```bash
-npm test        # 29/29
+npm test        # 36/36
 ```
 
 - `tests/flujoRetiro.test.js` (13): HU01 multi-equipo, RN01 (rechazo total), RN02,
@@ -136,8 +150,13 @@ npm test        # 29/29
 - `tests/flujoBitacora.test.js` (7): resuelve el nombre del actor + orden desc;
   filtros por usuario / tipo de actor / acción / rango de fechas; paginación;
   acciones sin duplicados; RN03 (inmutable en service y en BD).
+- `tests/flujoDashboard.test.js` (8): totales por estado; **RN05** (vida útil %
+  por fecha, acotada 0–100, fecha futura → 0, sin fecha → fuera del promedio);
+  filtro por categoría; "cerca del fin de vida útil"; **RNF01** (< 500 ms con 400+ equipos).
 
 ## Pendiente
 
-- HU05 `/api/dashboard` (indicadores + vida útil)
 - `/api/equipos/:id/componentes` — edición directa del estado físico por TIC
+  (fuera del alcance de las 6 HU; para después de la entrega)
+
+Las 6 historias de usuario del alcance v1 (HU01–HU06) están completas y verificadas.

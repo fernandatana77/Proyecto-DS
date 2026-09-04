@@ -26,6 +26,7 @@
     <nav class="tabs" id="tabs-panel">
       <button class="tab activo" data-vista="devoluciones">Devoluciones pendientes <span id="contador-pendientes" class="contador"></span></button>
       <button class="tab" data-vista="incidencias">Incidencias <span id="contador-incidencias" class="contador"></span></button>
+      <button class="tab" id="tab-dashboard" data-vista="dashboard" hidden>Dashboard</button>
       <button class="tab" id="tab-bitacora" data-vista="bitacora" hidden>Bitácora de auditoría</button>
     </nav>
 
@@ -47,6 +48,35 @@
       </div>
       <div id="lista-incidencias" class="lista-pendientes"></div>
       <p id="vacio-inc" class="vacio" hidden>No hay incidencias que coincidan con el filtro.</p>
+    </section>
+
+    <!-- Vista: dashboard (HU05) - solo Administrador -->
+    <section id="vista-dashboard" hidden>
+      <p class="sub-seccion">Indicadores del parque de equipos. La vida útil % se calcula según la fecha de adquisición (RN05).</p>
+
+      <div class="tabs" id="filtros-dashboard"></div>
+
+      <div id="aviso-dashboard" class="aviso error" hidden></div>
+
+      <div class="kpi-row" id="kpi-row"></div>
+
+      <h3 class="titulo-seccion" style="margin-top:24px">Desglose por categoría</h3>
+      <div class="tabla-scroll">
+        <table class="tabla-datos" id="tabla-dashboard">
+          <thead>
+            <tr>
+              <th>Categoría</th><th>Total</th><th>Disponibles</th><th>Prestados</th>
+              <th>En reparación</th><th>Vida útil prom.</th>
+            </tr>
+          </thead>
+          <tbody id="cuerpo-dashboard"></tbody>
+        </table>
+      </div>
+
+      <div id="cerca-fin-vida" hidden>
+        <h3 class="titulo-seccion" style="margin-top:24px">Cerca del fin de vida útil (≥ 85%)</h3>
+        <div id="lista-cerca-fin" class="lista-pendientes"></div>
+      </div>
     </section>
 
     <!-- Vista: bitácora de auditoría (HU06) - SOLO LECTURA, solo Administrador -->

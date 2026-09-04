@@ -53,7 +53,11 @@
   const esAdmin = perfil.rol === 'Admin';
 
   // ===================== Tabs =====================
-  if (esAdmin) $('tab-bitacora').hidden = false; // HU06 solo para el Administrador
+  if (esAdmin) {
+    // HU05 (Dashboard) y HU06 (Bitácora) son solo para el Administrador
+    $('tab-dashboard').hidden = false;
+    $('tab-bitacora').hidden = false;
+  }
 
   $('tabs-panel').addEventListener('click', (e) => {
     const tab = e.target.closest('.tab');
@@ -63,8 +67,10 @@
     const vista = tab.dataset.vista;
     $('vista-devoluciones').hidden = vista !== 'devoluciones';
     $('vista-incidencias').hidden = vista !== 'incidencias';
+    $('vista-dashboard').hidden = vista !== 'dashboard';
     $('vista-bitacora').hidden = vista !== 'bitacora';
     if (vista === 'incidencias') cargarIncidencias();
+    if (vista === 'dashboard') cargarDashboard();
     if (vista === 'bitacora') cargarBitacora();
   });
 
@@ -349,6 +355,112 @@
       $('btn-guardar-tri').disabled = false;
     }
   });
+
+  // ===================== HU05: dashboard (solo Admin) =====================
+  let dashboardCategoria = ''; // '' = todas
+
+  function tileVida(pct) {
+    if (pct == null) return '—';
+    const clase = pct >= 85 ? 'barra-bad' : pct >= 60 ? 'barra-warn' : 'barra-ok';
+    return (
+      `<span class="kpi-valor">${pct.toFixed(1)}%</span>` +
+      `<span class="barra-vida"><span class="barra-vida-fill ${clase}" style="width:${Math.min(100, pct)}%"></span></span>`
+    );
+  }
+
+  function renderKpis(t) {
+    const row = $('kpi-row');
+    row.innerHTML = '';
+    const tiles = [
+      { etiqueta: 'Total de equipos', valor: t.total },
+      { etiqueta: 'Prestados', valor: t.prestados, clase: 'kpi-warn' },
+      { etiqueta: 'En reparación', valor: t.enReparacion, clase: 'kpi-bad' },
+      { etiqueta: 'Disponibles', valor: t.disponibles, clase: 'kpi-ok' },
+    ];
+    tiles.forEach((k) => {
+      const d = el('div', `kpi ${k.clase || ''}`);
+      d.innerHTML = `<span class="kpi-valor">${k.valor}</span><span class="kpi-etiqueta">${k.etiqueta}</span>`;
+      row.appendChild(d);
+    });
+    const vida = el('div', 'kpi kpi-vida');
+    vida.innerHTML =
+      `${tileVida(t.vidaUtilPctPromedio)}<span class="kpi-etiqueta">Vida útil promedio` +
+      `${t.conVidaUtil ? ` · ${t.conVidaUtil} equipos` : ''}</span>`;
+    row.appendChild(vida);
+  }
+
+  function renderFiltrosDashboard(categorias) {
+    const cont = $('filtros-dashboard');
+    if (cont.dataset.listo) return;
+    ['', ...categorias].forEach((cat) => {
+      const b = el('button', 'tab' + (cat === dashboardCategoria ? ' activo' : ''), cat || 'Todas');
+      b.addEventListener('click', () => {
+        dashboardCategoria = cat;
+        cont.querySelectorAll('.tab').forEach((x) => x.classList.remove('activo'));
+        b.classList.add('activo');
+        cargarDashboard();
+      });
+      cont.appendChild(b);
+    });
+    cont.dataset.listo = '1';
+  }
+
+  function renderTablaDashboard(porCategoria) {
+    const cuerpo = $('cuerpo-dashboard');
+    cuerpo.innerHTML = '';
+    porCategoria.forEach((c) => {
+      const tr = document.createElement('tr');
+      tr.className = 'fila-clic';
+      tr.innerHTML =
+        `<td class="celda-principal">${c.categoria}</td>` +
+        `<td>${c.total}</td><td>${c.disponibles}</td><td>${c.prestados}</td>` +
+        `<td>${c.enReparacion}</td>` +
+        `<td>${c.vidaUtilPct == null ? '—' : c.vidaUtilPct.toFixed(1) + '%'}</td>`;
+      tr.addEventListener('click', () => {
+        dashboardCategoria = dashboardCategoria === c.categoria ? '' : c.categoria;
+        $('filtros-dashboard').querySelectorAll('.tab').forEach((x) =>
+          x.classList.toggle('activo', (x.textContent === 'Todas' ? '' : x.textContent) === dashboardCategoria)
+        );
+        cargarDashboard();
+      });
+      cuerpo.appendChild(tr);
+    });
+  }
+
+  function renderCercaFin(lista) {
+    const bloque = $('cerca-fin-vida');
+    bloque.hidden = lista.length === 0;
+    const cont = $('lista-cerca-fin');
+    cont.innerHTML = '';
+    lista.forEach((e) => {
+      const card = el('div', 'tarjeta-pendiente');
+      const info = el('div', 'pendiente-info');
+      info.appendChild(el('div', 'tarjeta-codigo', `${e.codigoInterno} · ${e.categoria}`));
+      info.appendChild(el('div', 'tarjeta-nombre', e.nombre));
+      info.appendChild(badge(e.estado === 'De Baja' ? 'badge-neutro' : 'badge-warn', e.estado));
+      const pct = el('div', 'pct-grande', `${e.vidaUtilPct.toFixed(1)}%`);
+      card.append(info, pct);
+      cont.appendChild(card);
+    });
+  }
+
+  async function cargarDashboard() {
+    if (!esAdmin) return;
+    $('aviso-dashboard').hidden = true;
+    $('kpi-row').innerHTML = '<div class="kpi"><span class="kpi-valor">…</span></div>';
+    try {
+      const params = dashboardCategoria ? `?categoria=${encodeURIComponent(dashboardCategoria)}` : '';
+      const d = await API.dashboard(params);
+      renderFiltrosDashboard(d.categorias);
+      renderKpis(d.totales);
+      renderTablaDashboard(d.porCategoria);
+      renderCercaFin(d.cercaFinVidaUtil);
+    } catch (error) {
+      $('kpi-row').innerHTML = '';
+      $('aviso-dashboard').textContent = error.mensaje || 'No se pudo cargar el dashboard.';
+      $('aviso-dashboard').hidden = false;
+    }
+  }
 
   // ===================== HU06: bitácora de auditoría (solo Admin, solo lectura) =====================
   const ACCION_CLASE = (accion) => {
