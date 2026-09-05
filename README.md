@@ -48,7 +48,8 @@
 
 ---
 
-Perfil	Cómo entra
-Empleado	Solo PIN de 6 dígitos: 123456, 234567 o 345678
-Administrador	Usuario admin / contraseña Admin123*
-Técnico	Usuario tecnico / contraseña Tecnico123*
+### Perfil
+Empleado:	Solo PIN de 6 dígitos: 123456, 234567 o 345678
+Administrador:	Usuario admin / contraseña Admin123*
+Técnico:	Usuario tecnico / contraseña Tecnico123*
+
