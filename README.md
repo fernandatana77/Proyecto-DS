@@ -47,3 +47,8 @@
 * **Resultado de Pruebas:** **43 / 43 pruebas pasadas con éxito (0 fallos).**
 
 ---
+
+Perfil	Cómo entra
+Empleado	Solo PIN de 6 dígitos: 123456, 234567 o 345678
+Administrador	Usuario admin / contraseña Admin123*
+Técnico	Usuario tecnico / contraseña Tecnico123*
