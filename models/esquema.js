@@ -101,9 +101,17 @@ CREATE TABLE IF NOT EXISTS prestamo (
   creado_en                 TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-ALTER TABLE checklist_estado
-  ADD CONSTRAINT fk_checklist_prestamo
-  FOREIGN KEY (prestamo_id) REFERENCES prestamo(id);
+-- Creacion segura e idempotente de la restriccion de clave foranea
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'fk_checklist_prestamo'
+  ) THEN
+    ALTER TABLE checklist_estado
+      ADD CONSTRAINT fk_checklist_prestamo
+      FOREIGN KEY (prestamo_id) REFERENCES prestamo(id) ON DELETE SET NULL;
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS incidencia (
   id                  SERIAL PRIMARY KEY,
