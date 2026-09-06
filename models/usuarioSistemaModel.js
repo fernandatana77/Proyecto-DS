@@ -18,9 +18,15 @@ async function crear({ empleadoId = null, usuario, passwordHash, rol, activo = 1
   const res = await query(
     `INSERT INTO usuario_sistema (empleado_id, usuario, password_hash, rol, activo)
      VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (usuario) DO NOTHING
      RETURNING *`,
     [empleadoId, usuario, passwordHash, rol, activo ? 1 : 0]
   );
+
+  if (!res.rows[0]) {
+    return await buscarActivoPorUsuario(usuario);
+  }
+
   return res.rows[0];
 }
 
