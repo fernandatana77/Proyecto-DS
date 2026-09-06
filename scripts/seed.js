@@ -7,7 +7,7 @@
  * NO toca `log_auditoria` (es inmutable, RN03).
  */
 
-const { obtenerConexion } = require('../config/database');
+const { query } = require('../config/database');
 const { ejecutarMigraciones } = require('../models/esquema');
 const { COMPONENTES_POR_CATEGORIA } = require('../config/constantes');
 const { hashPin, hashPassword } = require('../utils/hash');
@@ -62,22 +62,20 @@ const EQUIPOS = [
   { codigo: 'PRO-0002', nombre: 'Proyector BenQ MS550', categoria: 'Proyector', marca: 'BenQ', modelo: 'MS550', serie: 'BQ-MS550-0002', estado: 'De Baja', sede: 'Matriz Cuenca', ubicacion: 'Bodega TIC', adquisicion: '2019-02-01', valor: 480, vidaUtil: 60, componentes: { lampara: ['malo', 'Lampara agotada'], ventilacion: ['malo', 'Ventilador no gira'] } },
 ];
 
-// El seed recrea el esquema desde cero (util en desarrollo cuando cambian tablas).
-// NO incluye log_auditoria: la bitacora es inmutable y se conserva entre seeds.
 const TABLAS_RECREABLES = [
   'checklist_estado', 'incidencia', 'mantenimiento', 'software_instalado',
   'prestamo', 'retiro', 'componente_equipo', 'usuario_sistema', 'equipo', 'empleado',
 ];
 
-function recrearEsquema(db) {
-  db.exec('PRAGMA foreign_keys = OFF;');
-  for (const tabla of TABLAS_RECREABLES) db.exec(`DROP TABLE IF EXISTS ${tabla};`);
-  db.exec('PRAGMA foreign_keys = ON;');
-  ejecutarMigraciones();
+async function recrearEsquema() {
+  for (const tabla of TABLAS_RECREABLES) {
+    await query(`TRUNCATE TABLE ${tabla} CASCADE;`);
+  }
+  await ejecutarMigraciones();
 }
 
-function crearEquipoConComponentes(def) {
-  const equipo = equipoModel.crear({
+async function crearEquipoConComponentes(def) {
+  const equipo = await equipoModel.crear({
     codigoInterno: def.codigo,
     nombre: def.nombre,
     categoria: def.categoria,
@@ -97,25 +95,30 @@ function crearEquipoConComponentes(def) {
     const [estado, observacion] = Array.isArray(override)
       ? override
       : [override || 'bueno', null];
-    componenteEquipoModel.crear({ equipoId: equipo.id, nombre, estado, observacion });
+    await componenteEquipoModel.crear({ equipoId: equipo.id, nombre, estado, observacion });
   }
   return equipo;
 }
 
 /**
  * Carga los datos demo.
- * @param {{ recrear?: boolean }} opciones  recrear = DROP + CREATE de las tablas
- *        (uso normal de `npm run seed` en desarrollo). Sin recrear, solo inserta
- *        (uso del arranque automatico cuando la BD esta vacia, p. ej. un deploy nuevo).
+ * @param {{ recrear?: boolean }} opciones recrear = TRUNCATE + RE-CREATE de las tablas
  */
-function sembrarDatosDemo({ recrear = false } = {}) {
-  const db = obtenerConexion();
-  if (recrear) recrearEsquema(db);
-  else ejecutarMigraciones();
+async function sembrarDatosDemo({ recrear = false } = {}) {
+  await ejecutarMigraciones();
+  if (recrear) {
+    await recrearEsquema();
+  }
 
-  for (const emp of EMPLEADOS) empleadoModel.crear({ ...emp, pinHash: hashPin(emp.pin) });
-  for (const c of STAFF) usuarioSistemaModel.crear({ usuario: c.usuario, passwordHash: hashPassword(c.password), rol: c.rol });
-  for (const def of EQUIPOS) crearEquipoConComponentes(def);
+  for (const emp of EMPLEADOS) {
+    await empleadoModel.crear({ ...emp, pinHash: hashPin(emp.pin) });
+  }
+  for (const c of STAFF) {
+    await usuarioSistemaModel.crear({ usuario: c.usuario, passwordHash: hashPassword(c.password), rol: c.rol });
+  }
+  for (const def of EQUIPOS) {
+    await crearEquipoConComponentes(def);
+  }
 
   return {
     empleados: EMPLEADOS.length,
@@ -128,9 +131,16 @@ module.exports = { sembrarDatosDemo };
 
 // Ejecucion directa: `npm run seed` -> recrea el esquema y carga todo.
 if (require.main === module) {
-  const resumen = sembrarDatosDemo({ recrear: true });
-  console.log('Seed completado.');
-  console.log('  Empleados (PIN):', EMPLEADOS.map((e) => `${e.nombres} ${e.apellidos} -> ${e.pin}`).join(' | '));
-  console.log('  Staff:', STAFF.map((s) => `${s.usuario}/${s.password} (${s.rol})`).join(' | '));
-  console.log(`  Equipos: ${resumen.equipos}`);
+  sembrarDatosDemo({ recrear: true })
+    .then((resumen) => {
+      console.log('Seed completado.');
+      console.log('  Empleados (PIN):', EMPLEADOS.map((e) => `${e.nombres} ${e.apellidos} -> ${e.pin}`).join(' | '));
+      console.log('  Staff:', STAFF.map((s) => `${s.usuario}/${s.password} (${s.rol})`).join(' | '));
+      console.log(`  Equipos: ${resumen.equipos}`);
+      process.exit(0);
+    })
+    .catch((err) => {
+      console.error('Error durante el seed:', err);
+      process.exit(1);
+    });
 }
