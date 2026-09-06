@@ -1,52 +1,56 @@
 'use strict';
 
-const path = require('node:path');
-const fs = require('node:fs');
-const { DatabaseSync } = require('node:sqlite');
-
+const { Pool } = require('pg');
 const config = require('./config');
 
-let db = null;
+let pool = null;
 
-/** Devuelve la conexion unica a SQLite, abriendola la primera vez. */
-function obtenerConexion() {
-  if (db) return db;
+/** Devuelve el pool único de conexiones a PostgreSQL. */
+function obtenerPool() {
+  if (pool) return pool;
 
-  const ruta = config.rutaBaseDatos;
-  if (ruta !== ':memory:') {
-    const directorio = path.dirname(path.resolve(ruta));
-    fs.mkdirSync(directorio, { recursive: true });
-  }
+  const connectionString = process.env.DATABASE_URL || config.rutaBaseDatos;
 
-  db = new DatabaseSync(ruta);
-  db.exec('PRAGMA foreign_keys = ON;');
-  db.exec('PRAGMA journal_mode = WAL;');
-  return db;
+  pool = new Pool({
+    connectionString,
+    // En Render y entornos de producción en la nube se requiere SSL
+    ssl: process.env.NODE_ENV === 'production' || process.env.DATABASE_URL?.includes('render.com')
+      ? { rejectUnauthorized: false }
+      : false
+  });
+
+  return pool;
 }
 
-/**
- * Ejecuta `fn` dentro de una transaccion. Hace COMMIT si termina bien y
- * ROLLBACK si lanza. Devuelve lo que devuelva `fn`.
- */
-function enTransaccion(fn) {
-  const conexion = obtenerConexion();
-  conexion.exec('BEGIN');
+/** Ejecuta una consulta SQL en PostgreSQL utilizando el pool. */
+async function query(text, params) {
+  const p = obtenerPool();
+  return await p.query(text, params);
+}
+
+/** Ejecuta una función dentro de una transacción en PostgreSQL. */
+async function enTransaccion(fn) {
+  const p = obtenerPool();
+  const cliente = await p.connect();
   try {
-    const resultado = fn(conexion);
-    conexion.exec('COMMIT');
+    await cliente.query('BEGIN');
+    const resultado = await fn(cliente);
+    await cliente.query('COMMIT');
     return resultado;
   } catch (error) {
-    conexion.exec('ROLLBACK');
+    await cliente.query('ROLLBACK');
     throw error;
+  } finally {
+    cliente.release();
   }
 }
 
-/** Cierra la conexion (util en tests). */
-function cerrarConexion() {
-  if (db) {
-    db.close();
-    db = null;
+/** Cierra el pool de conexiones (útil en pruebas). */
+async function cerrarConexion() {
+  if (pool) {
+    await pool.end();
+    pool = null;
   }
 }
 
-module.exports = { obtenerConexion, enTransaccion, cerrarConexion };
+module.exports = { obtenerPool, query, enTransaccion, cerrarConexion };

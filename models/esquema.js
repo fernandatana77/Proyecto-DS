@@ -1,179 +1,178 @@
 'use strict';
 
-const { obtenerConexion } = require('../config/database');
+const { query } = require('../config/database');
 
 /**
- * Definicion completa del esquema (una tabla por entidad del DER) mas los
- * triggers que hacen inmutable `log_auditoria` (RF07 / RN03).
- * Se ejecuta al iniciar el servidor y en el seed. Es idempotente.
+ * Definición completa del esquema en PostgreSQL más las funciones/triggers
+ * que garantizan la inmutabilidad de `log_auditoria` (RF07 / RN03).
  */
 const DDL = `
 CREATE TABLE IF NOT EXISTS empleado (
-  id                INTEGER PRIMARY KEY AUTOINCREMENT,
-  cedula            TEXT    NOT NULL UNIQUE,
-  nombres           TEXT    NOT NULL,
-  apellidos         TEXT    NOT NULL,
-  correo            TEXT    UNIQUE,
-  cargo             TEXT,
-  sede              TEXT    NOT NULL,
-  pin_hash          TEXT    NOT NULL UNIQUE,
-  activo            INTEGER NOT NULL DEFAULT 1,
-  creado_en         TEXT    NOT NULL DEFAULT (datetime('now'))
+  id                SERIAL PRIMARY KEY,
+  cedula            VARCHAR(20) NOT NULL UNIQUE,
+  nombres           VARCHAR(100) NOT NULL,
+  apellidos         VARCHAR(100) NOT NULL,
+  correo            VARCHAR(150) UNIQUE,
+  cargo             VARCHAR(100),
+  sede              VARCHAR(100) NOT NULL,
+  pin_hash          VARCHAR(255) NOT NULL UNIQUE,
+  activo            SMALLINT NOT NULL DEFAULT 1,
+  creado_en         TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS usuario_sistema (
-  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  id                SERIAL PRIMARY KEY,
   empleado_id       INTEGER REFERENCES empleado(id),
-  usuario           TEXT    NOT NULL UNIQUE,
-  password_hash     TEXT    NOT NULL,
-  rol               TEXT    NOT NULL CHECK (rol IN ('Admin','Técnico')),
-  activo            INTEGER NOT NULL DEFAULT 1,
-  creado_en         TEXT    NOT NULL DEFAULT (datetime('now'))
+  usuario           VARCHAR(50) NOT NULL UNIQUE,
+  password_hash     VARCHAR(255) NOT NULL,
+  rol               VARCHAR(20) NOT NULL CHECK (rol IN ('Admin','Técnico')),
+  activo            SMALLINT NOT NULL DEFAULT 1,
+  creado_en         TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS equipo (
-  id                INTEGER PRIMARY KEY AUTOINCREMENT,
-  codigo_interno    TEXT    NOT NULL UNIQUE,
-  nombre            TEXT    NOT NULL,
-  categoria         TEXT    NOT NULL,
-  marca             TEXT,
-  modelo            TEXT,
-  numero_serie      TEXT    UNIQUE,
-  estado            TEXT    NOT NULL DEFAULT 'Disponible'
+  id                SERIAL PRIMARY KEY,
+  codigo_interno    VARCHAR(50) NOT NULL UNIQUE,
+  nombre            VARCHAR(150) NOT NULL,
+  categoria         VARCHAR(100) NOT NULL,
+  marca             VARCHAR(100),
+  modelo            VARCHAR(100),
+  numero_serie      VARCHAR(100) UNIQUE,
+  estado            VARCHAR(50) NOT NULL DEFAULT 'Disponible'
                     CHECK (estado IN ('Disponible','Prestado','En Reparación','En Instalación','De Baja')),
-  sede              TEXT    NOT NULL,
-  ubicacion         TEXT,
-  fecha_adquisicion TEXT,
-  valor_adquisicion REAL,
+  sede              VARCHAR(100) NOT NULL,
+  ubicacion         VARCHAR(150),
+  fecha_adquisicion DATE,
+  valor_adquisicion NUMERIC(12, 2),
   vida_util_meses   INTEGER NOT NULL DEFAULT 48,
-  creado_en         TEXT    NOT NULL DEFAULT (datetime('now'))
+  creado_en         TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Estado fisico por componente. Lo registra y mantiene TIC (Admin / Tecnico).
--- El Empleado NUNCA lo modifica: solo lo ve y lo acepta (RF02).
 CREATE TABLE IF NOT EXISTS componente_equipo (
-  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
-  equipo_id          INTEGER NOT NULL REFERENCES equipo(id) ON DELETE CASCADE,
-  nombre             TEXT    NOT NULL,
-  estado             TEXT    NOT NULL DEFAULT 'bueno' CHECK (estado IN ('bueno','regular','malo')),
-  observacion        TEXT,
-  actualizado_en     TEXT    NOT NULL DEFAULT (datetime('now')),
+  id                SERIAL PRIMARY KEY,
+  equipo_id         INTEGER NOT NULL REFERENCES equipo(id) ON DELETE CASCADE,
+  nombre            VARCHAR(100) NOT NULL,
+  estado            VARCHAR(20) NOT NULL DEFAULT 'bueno' CHECK (estado IN ('bueno','regular','malo')),
+  observacion       TEXT,
+  actualizado_en    TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
   actualizado_por_id INTEGER REFERENCES usuario_sistema(id),
   UNIQUE (equipo_id, nombre)
 );
 
--- Cabecera del "carrito de retiro": agrupa varios prestamos formalizados juntos
--- con una unica aceptacion del Empleado por PIN.
 CREATE TABLE IF NOT EXISTS retiro (
-  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  id                SERIAL PRIMARY KEY,
   empleado_id       INTEGER NOT NULL REFERENCES empleado(id),
-  estado            TEXT    NOT NULL DEFAULT 'Activo' CHECK (estado IN ('Activo','Parcial','Devuelto')),
-  aceptado_con_pin  INTEGER NOT NULL DEFAULT 0,
-  fecha_aceptacion  TEXT,
-  fecha_retiro      TEXT    NOT NULL DEFAULT (datetime('now')),
+  estado            VARCHAR(20) NOT NULL DEFAULT 'Activo' CHECK (estado IN ('Activo','Parcial','Devuelto')),
+  aceptado_con_pin  SMALLINT NOT NULL DEFAULT 0,
+  fecha_aceptacion  TIMESTAMP WITH TIME ZONE,
+  fecha_retiro      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
   observaciones     TEXT,
-  creado_en         TEXT    NOT NULL DEFAULT (datetime('now'))
+  creado_en         TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS checklist_estado (
+  id                SERIAL PRIMARY KEY,
+  prestamo_id       INTEGER,
+  tipo              VARCHAR(20) NOT NULL CHECK (tipo IN ('salida','recepcion')),
+  items_json        TEXT NOT NULL,
+  observaciones     TEXT,
+  tiene_dano        SMALLINT NOT NULL DEFAULT 0,
+  realizado_por_tipo VARCHAR(50) NOT NULL,
+  realizado_por_id  INTEGER,
+  creado_en         TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS prestamo (
-  id                        INTEGER PRIMARY KEY AUTOINCREMENT,
+  id                        SERIAL PRIMARY KEY,
   retiro_id                 INTEGER REFERENCES retiro(id),
   empleado_id               INTEGER NOT NULL REFERENCES empleado(id),
   equipo_id                 INTEGER NOT NULL REFERENCES equipo(id),
-  estado                    TEXT    NOT NULL DEFAULT 'Activo' CHECK (estado IN ('Activo','Devuelto')),
-  fecha_prestamo            TEXT    NOT NULL DEFAULT (datetime('now')),
-  fecha_devolucion_esperada TEXT,
-  fecha_devolucion_real     TEXT,
-  aceptado_con_pin          INTEGER NOT NULL DEFAULT 0,
-  fecha_aceptacion          TEXT,
-  devolucion_solicitada     INTEGER NOT NULL DEFAULT 0,
-  fecha_solicitud_devolucion TEXT,
+  estado                    VARCHAR(20) NOT NULL DEFAULT 'Activo' CHECK (estado IN ('Activo','Devuelto')),
+  fecha_prestamo            TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  fecha_devolucion_esperada TIMESTAMP WITH TIME ZONE,
+  fecha_devolucion_real     TIMESTAMP WITH TIME ZONE,
+  aceptado_con_pin          SMALLINT NOT NULL DEFAULT 0,
+  fecha_aceptacion          TIMESTAMP WITH TIME ZONE,
+  devolucion_solicitada     SMALLINT NOT NULL DEFAULT 0,
+  fecha_solicitud_devolucion TIMESTAMP WITH TIME ZONE,
   checklist_salida_id       INTEGER REFERENCES checklist_estado(id),
   checklist_recepcion_id    INTEGER REFERENCES checklist_estado(id),
   observaciones             TEXT,
-  creado_en                 TEXT    NOT NULL DEFAULT (datetime('now'))
+  creado_en                 TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Foto del estado fisico en un momento dado: 'salida' = lo que el Empleado
--- acepto al retirar; 'recepcion' = lo que TIC constata al recibir (HU04).
-CREATE TABLE IF NOT EXISTS checklist_estado (
-  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
-  prestamo_id        INTEGER REFERENCES prestamo(id),
-  tipo               TEXT    NOT NULL CHECK (tipo IN ('salida','recepcion')),
-  items_json         TEXT    NOT NULL,
-  observaciones      TEXT,
-  tiene_dano         INTEGER NOT NULL DEFAULT 0,
-  realizado_por_tipo TEXT    NOT NULL,
-  realizado_por_id   INTEGER,
-  creado_en          TEXT    NOT NULL DEFAULT (datetime('now'))
-);
+ALTER TABLE checklist_estado
+  ADD CONSTRAINT fk_checklist_prestamo
+  FOREIGN KEY (prestamo_id) REFERENCES prestamo(id);
 
--- HU03. El Empleado solo escribe descripcion (texto libre). La incidencia nace
--- 'sin clasificar' / 'Abierta'; TIC asigna severidad, mueve el estado y agrega
--- notas_tic al triarla. Reportar una incidencia NO cambia el estado del equipo.
 CREATE TABLE IF NOT EXISTS incidencia (
-  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
-  prestamo_id        INTEGER REFERENCES prestamo(id),
-  equipo_id          INTEGER NOT NULL REFERENCES equipo(id),
-  reportado_por_tipo TEXT    NOT NULL,
-  reportado_por_id   INTEGER,
-  descripcion        TEXT    NOT NULL,
-  severidad          TEXT    NOT NULL DEFAULT 'sin clasificar'
-                     CHECK (severidad IN ('sin clasificar','baja','media','alta')),
-  estado             TEXT    NOT NULL DEFAULT 'Abierta'
-                     CHECK (estado IN ('Abierta','En proceso','Cerrada')),
-  notas_tic          TEXT,
-  atendida_por_id    INTEGER REFERENCES usuario_sistema(id),
-  fecha_reporte      TEXT    NOT NULL DEFAULT (datetime('now')),
-  fecha_actualizacion TEXT,
-  fecha_cierre       TEXT
+  id                  SERIAL PRIMARY KEY,
+  prestamo_id         INTEGER REFERENCES prestamo(id),
+  equipo_id           INTEGER NOT NULL REFERENCES equipo(id),
+  reportado_por_tipo  VARCHAR(50) NOT NULL,
+  reportado_por_id    INTEGER,
+  descripcion         TEXT NOT NULL,
+  severidad           VARCHAR(20) NOT NULL DEFAULT 'sin clasificar'
+                      CHECK (severidad IN ('sin clasificar','baja','media','alta')),
+  estado              VARCHAR(20) NOT NULL DEFAULT 'Abierta'
+                      CHECK (estado IN ('Abierta','En proceso','Cerrada')),
+  notas_tic           TEXT,
+  atendida_por_id     INTEGER REFERENCES usuario_sistema(id),
+  fecha_reporte       TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  fecha_actualizacion TIMESTAMP WITH TIME ZONE,
+  fecha_cierre        TIMESTAMP WITH TIME ZONE
 );
 
 CREATE TABLE IF NOT EXISTS mantenimiento (
-  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  id                SERIAL PRIMARY KEY,
   equipo_id         INTEGER NOT NULL REFERENCES equipo(id),
-  tipo              TEXT    NOT NULL CHECK (tipo IN ('Preventivo','Correctivo')),
-  descripcion       TEXT    NOT NULL,
-  costo             REAL    DEFAULT 0,
-  realizado_por     TEXT,
-  fecha_inicio      TEXT    NOT NULL DEFAULT (datetime('now')),
-  fecha_fin         TEXT,
-  estado            TEXT    NOT NULL DEFAULT 'En proceso' CHECK (estado IN ('En proceso','Finalizado'))
+  tipo              VARCHAR(20) NOT NULL CHECK (tipo IN ('Preventivo','Correctivo')),
+  descripcion       TEXT NOT NULL,
+  costo             NUMERIC(12, 2) DEFAULT 0,
+  realizado_por     VARCHAR(150),
+  fecha_inicio      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  fecha_fin         TIMESTAMP WITH TIME ZONE,
+  estado            VARCHAR(20) NOT NULL DEFAULT 'En proceso' CHECK (estado IN ('En proceso','Finalizado'))
 );
 
 CREATE TABLE IF NOT EXISTS software_instalado (
-  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  id                SERIAL PRIMARY KEY,
   equipo_id         INTEGER NOT NULL REFERENCES equipo(id),
-  nombre            TEXT    NOT NULL,
-  version           TEXT,
-  licencia          TEXT,
-  fecha_instalacion TEXT    NOT NULL DEFAULT (datetime('now'))
+  nombre            VARCHAR(150) NOT NULL,
+  version           VARCHAR(50),
+  licencia          VARCHAR(100),
+  fecha_instalacion TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS log_auditoria (
-  id                INTEGER PRIMARY KEY AUTOINCREMENT,
-  fecha             TEXT    NOT NULL DEFAULT (datetime('now')),
-  actor_tipo        TEXT    NOT NULL,
+  id                SERIAL PRIMARY KEY,
+  fecha             TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  actor_tipo        VARCHAR(50) NOT NULL,
   actor_id          INTEGER,
-  accion            TEXT    NOT NULL,
-  entidad           TEXT,
+  accion            VARCHAR(100) NOT NULL,
+  entidad           VARCHAR(100),
   entidad_id        INTEGER,
   detalle_json      TEXT,
-  ip                TEXT
+  ip                VARCHAR(45)
 );
 
--- RF07 / RN03: la bitacora es de solo lectura. Garantizado en la propia BD.
-CREATE TRIGGER IF NOT EXISTS log_auditoria_no_update
-BEFORE UPDATE ON log_auditoria
+-- Trigger PL/pgSQL para garantizar inmutabilidad de la auditoria (RF07 / RN03)
+CREATE OR REPLACE FUNCTION denegar_modificacion_log_auditoria()
+RETURNS TRIGGER AS $$
 BEGIN
-  SELECT RAISE(ABORT, 'log_auditoria es de solo lectura: no se puede editar');
+  RAISE EXCEPTION 'log_auditoria es de solo lectura: no se permite modificacion ni borrado';
 END;
+$$ LANGUAGE plpgsql;
 
-CREATE TRIGGER IF NOT EXISTS log_auditoria_no_delete
+DROP TRIGGER IF EXISTS trg_log_auditoria_no_update ON log_auditoria;
+CREATE TRIGGER trg_log_auditoria_no_update
+BEFORE UPDATE ON log_auditoria
+FOR EACH ROW EXECUTE FUNCTION denegar_modificacion_log_auditoria();
+
+DROP TRIGGER IF EXISTS trg_log_auditoria_no_delete ON log_auditoria;
+CREATE TRIGGER trg_log_auditoria_no_delete
 BEFORE DELETE ON log_auditoria
-BEGIN
-  SELECT RAISE(ABORT, 'log_auditoria es de solo lectura: no se puede borrar');
-END;
+FOR EACH ROW EXECUTE FUNCTION denegar_modificacion_log_auditoria();
 
 CREATE INDEX IF NOT EXISTS idx_equipo_estado ON equipo(estado);
 CREATE INDEX IF NOT EXISTS idx_equipo_categoria ON equipo(categoria);
@@ -188,9 +187,9 @@ CREATE INDEX IF NOT EXISTS idx_incidencia_estado ON incidencia(estado);
 CREATE INDEX IF NOT EXISTS idx_log_fecha ON log_auditoria(fecha);
 `;
 
-/** Crea tablas, triggers e indices si no existen. */
-function ejecutarMigraciones() {
-  obtenerConexion().exec(DDL);
+/** Crea tablas, triggers e índices si no existen de forma asíncrona. */
+async function ejecutarMigraciones() {
+  await query(DDL);
 }
 
 module.exports = { ejecutarMigraciones };

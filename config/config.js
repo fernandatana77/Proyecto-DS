@@ -1,13 +1,12 @@
 'use strict';
 
 /**
- * Carga y valida la configuracion desde variables de entorno.
+ * Carga y valida la configuración desde variables de entorno.
  * En local se inyectan con `node --env-file-if-exists=.env` (ver package.json);
  * en un hosting (Render, etc.) se configuran en el panel del servicio.
  */
 
-// Valores que NUNCA deben quedar en produccion (placeholders del .env.example
-// y los fallback de desarrollo de este archivo).
+// Valores que NUNCA deben quedar en producción
 const VALORES_INSEGUROS = new Set([
   'cambia-esto-por-un-secreto-largo-y-aleatorio',
   'cambia-esto-por-otra-cadena-larga-y-aleatoria',
@@ -27,7 +26,7 @@ if (esProduccion) {
   if (!process.env.PIN_PEPPER || VALORES_INSEGUROS.has(process.env.PIN_PEPPER)) faltantes.push('PIN_PEPPER');
   if (faltantes.length) {
     throw new Error(
-      `Configuracion invalida en produccion: defina ${faltantes.join(' y ')} ` +
+      `Configuración inválida en producción: defina ${faltantes.join(' y ')} ` +
         'con valores propios largos y aleatorios en las variables de entorno.'
     );
   }
@@ -36,9 +35,9 @@ if (esProduccion) {
 const config = {
   entorno,
   esProduccion,
-  // Render (y la mayoria de hostings) inyecta PORT; en local se usa PUERTO o 3000.
   puerto: Number(process.env.PORT || process.env.PUERTO || 3000),
-  rutaBaseDatos: process.env.DB_RUTA || './data/inventario.db',
+  // URL de conexion a PostgreSQL (Render inyecta DATABASE_URL automaticamente)
+  databaseUrl: process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/inventario_tic',
   jwt: {
     secreto: jwtSecret,
     expiracionStaff: process.env.JWT_EXPIRACION_STAFF || '8h',
@@ -48,8 +47,6 @@ const config = {
     emisor: 'sistema-inventario-tic',
   },
   pinPepper,
-  // Al arrancar, si la BD esta vacia, cargar datos demo (util en un deploy
-  // nuevo). Se desactiva con SEMBRAR_DEMO=off.
   sembrarDemoSiVacia: process.env.SEMBRAR_DEMO !== 'off',
 };
 
