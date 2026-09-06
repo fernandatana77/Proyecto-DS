@@ -1,33 +1,30 @@
 'use strict';
 
-const { obtenerConexion } = require('../config/database');
+const { query } = require('../config/database');
 
-/** Acceso a datos de la tabla `checklist_estado`. Solo SQL, sin logica de negocio. */
+/** Acceso a datos asíncrono de la tabla `checklist_estado` para PostgreSQL. */
 
-function buscarPorId(id) {
-  const fila = obtenerConexion().prepare('SELECT * FROM checklist_estado WHERE id = ?').get(id);
-  return fila ? hidratar(fila) : undefined;
+async function buscarPorId(id) {
+  const res = await query('SELECT * FROM checklist_estado WHERE id = $1', [id]);
+  return res.rows[0] ? hidratar(res.rows[0]) : null;
 }
 
-function buscarPorPrestamo(prestamoId) {
-  return obtenerConexion()
-    .prepare('SELECT * FROM checklist_estado WHERE prestamo_id = ? ORDER BY id')
-    .all(prestamoId)
-    .map(hidratar);
+async function buscarPorPrestamo(prestamoId) {
+  const res = await query('SELECT * FROM checklist_estado WHERE prestamo_id = $1 ORDER BY id', [prestamoId]);
+  return res.rows.map(hidratar);
 }
 
 /**
  * Crea un checklist. `items` es un objeto { pantalla: 'bueno', ... }; se guarda
  * serializado. `tieneDano` lo calcula el service segun las reglas (RN04).
  */
-function crear({ prestamoId = null, tipo, items, observaciones = null, tieneDano = 0, realizadoPorTipo, realizadoPorId = null }) {
-  const info = obtenerConexion()
-    .prepare(
-      `INSERT INTO checklist_estado
-         (prestamo_id, tipo, items_json, observaciones, tiene_dano, realizado_por_tipo, realizado_por_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    )
-    .run(
+async function crear({ prestamoId = null, tipo, items, observaciones = null, tieneDano = 0, realizadoPorTipo, realizadoPorId = null }) {
+  const res = await query(
+    `INSERT INTO checklist_estado
+       (prestamo_id, tipo, items_json, observaciones, tiene_dano, realizado_por_tipo, realizado_por_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     RETURNING *`,
+    [
       prestamoId,
       tipo,
       JSON.stringify(items),
@@ -35,19 +32,20 @@ function crear({ prestamoId = null, tipo, items, observaciones = null, tieneDano
       tieneDano ? 1 : 0,
       realizadoPorTipo,
       realizadoPorId
-    );
-  return buscarPorId(Number(info.lastInsertRowid));
+    ]
+  );
+  return hidratar(res.rows[0]);
 }
 
 /** Asocia un checklist creado antes que el prestamo (mismo flujo transaccional). */
-function asignarPrestamo(id, prestamoId) {
-  obtenerConexion()
-    .prepare('UPDATE checklist_estado SET prestamo_id = ? WHERE id = ?')
-    .run(prestamoId, id);
+async function asignarPrestamo(id, prestamoId) {
+  await query('UPDATE checklist_estado SET prestamo_id = $1 WHERE id = $2', [prestamoId, id]);
 }
 
 function hidratar(fila) {
-  return { ...fila, items: JSON.parse(fila.items_json), tiene_dano: Boolean(fila.tiene_dano) };
+  if (!fila) return null;
+  const items = typeof fila.items_json === 'string' ? JSON.parse(fila.items_json) : fila.items_json;
+  return { ...fila, items, tiene_dano: Boolean(fila.tiene_dano) };
 }
 
 module.exports = { buscarPorId, buscarPorPrestamo, crear, asignarPrestamo };

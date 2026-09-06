@@ -1,27 +1,27 @@
 'use strict';
 
-const { obtenerConexion } = require('../config/database');
+const { query } = require('../config/database');
 
-/** Acceso a datos de la tabla `usuario_sistema` (staff: Admin / Tecnico). */
+/** Acceso a datos asíncrono de la tabla `usuario_sistema` para PostgreSQL. */
 
-function buscarPorId(id) {
-  return obtenerConexion().prepare('SELECT * FROM usuario_sistema WHERE id = ?').get(id);
+async function buscarPorId(id) {
+  const res = await query('SELECT * FROM usuario_sistema WHERE id = $1', [id]);
+  return res.rows[0] || null;
 }
 
-function buscarActivoPorUsuario(usuario) {
-  return obtenerConexion()
-    .prepare('SELECT * FROM usuario_sistema WHERE usuario = ? AND activo = 1')
-    .get(usuario);
+async function buscarActivoPorUsuario(usuario) {
+  const res = await query('SELECT * FROM usuario_sistema WHERE usuario = $1 AND activo = 1', [usuario]);
+  return res.rows[0] || null;
 }
 
-function crear({ empleadoId = null, usuario, passwordHash, rol, activo = 1 }) {
-  const info = obtenerConexion()
-    .prepare(
-      `INSERT INTO usuario_sistema (empleado_id, usuario, password_hash, rol, activo)
-       VALUES (?, ?, ?, ?, ?)`
-    )
-    .run(empleadoId, usuario, passwordHash, rol, activo ? 1 : 0);
-  return buscarPorId(Number(info.lastInsertRowid));
+async function crear({ empleadoId = null, usuario, passwordHash, rol, activo = 1 }) {
+  const res = await query(
+    `INSERT INTO usuario_sistema (empleado_id, usuario, password_hash, rol, activo)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING *`,
+    [empleadoId, usuario, passwordHash, rol, activo ? 1 : 0]
+  );
+  return res.rows[0];
 }
 
 module.exports = { buscarPorId, buscarActivoPorUsuario, crear };
